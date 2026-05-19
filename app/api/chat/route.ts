@@ -72,7 +72,37 @@ async function callGemini(messages: { role: string; content: string }[]): Promis
   }
 }
 
-// Provider 3: OpenRouter (mistral-7b-instruct free)
+// Provider 3: NVIDIA NIM (gpt-oss-120b via OpenAI-compatible endpoint)
+async function callNvidia(messages: { role: string; content: string }[]): Promise<AIResult> {
+  try {
+    const res = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-oss-120b",
+        messages,
+        stream: false,
+        max_tokens: 800,
+        temperature: 0.4,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const err = data?.error?.message ?? `HTTP ${res.status}`;
+      console.error("[Nvidia]", res.status, err);
+      return { content: null, error: err };
+    }
+    return { content: data.choices?.[0]?.message?.content ?? null };
+  } catch (e) {
+    console.error("[Nvidia exception]", e);
+    return { content: null, error: String(e) };
+  }
+}
+
+// Provider 4: OpenRouter (mistral-7b-instruct free)
 async function callOpenRouter(messages: { role: string; content: string }[]): Promise<AIResult> {
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -105,7 +135,7 @@ async function callOpenRouter(messages: { role: string; content: string }[]): Pr
 }
 
 async function getAIResponse(messages: { role: string; content: string }[]): Promise<string | null> {
-  const providers = [callGroq, callGemini, callOpenRouter];
+  const providers = [callGroq, callGemini, callNvidia, callOpenRouter];
   for (const provider of providers) {
     const result = await provider(messages);
     if (result.content) return result.content;
