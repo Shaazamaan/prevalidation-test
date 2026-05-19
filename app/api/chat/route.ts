@@ -14,7 +14,7 @@ async function callGroq(messages: { role: string; content: string }[]): Promise<
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-8b-instant",
         messages,
         stream: false,
         max_tokens: 800,
