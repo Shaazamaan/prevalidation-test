@@ -203,6 +203,7 @@ export async function POST(req: NextRequest) {
         for (let i = 0; i < words.length; i++) {
           const token = i === 0 ? words[i] : " " + words[i];
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
+          await new Promise((r) => setTimeout(r, 18));
         }
         controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
         controller.close();
