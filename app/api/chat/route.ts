@@ -5,7 +5,10 @@ import { SYSTEM_PROMPT } from "@/lib/prompt";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-async function callGroq(messages: { role: string; content: string }[]): Promise<{ content: string | null; error?: string }> {
+type AIResult = { content: string | null; error?: string };
+
+// Provider 1: Groq (llama-3.1-8b-instant — 131k TPM free tier)
+async function callGroq(messages: { role: string; content: string }[]): Promise<AIResult> {
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -23,29 +26,28 @@ async function callGroq(messages: { role: string; content: string }[]): Promise<
     });
     const data = await res.json();
     if (!res.ok) {
-      const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
-      console.error("Groq error:", res.status, errMsg);
-      return { content: null, error: `Groq ${res.status}: ${errMsg}` };
+      const err = data?.error?.message ?? `HTTP ${res.status}`;
+      console.error("[Groq]", res.status, err);
+      return { content: null, error: err };
     }
     return { content: data.choices?.[0]?.message?.content ?? null };
   } catch (e) {
-    console.error("Groq exception:", e);
+    console.error("[Groq exception]", e);
     return { content: null, error: String(e) };
   }
 }
 
-async function callGemini(messages: { role: string; content: string }[]): Promise<{ content: string | null; error?: string }> {
+// Provider 2: Gemini (gemini-pro — system prompt injected as first exchange)
+async function callGemini(messages: { role: string; content: string }[]): Promise<AIResult> {
   try {
-    // gemini-pro: inject system prompt as first user/model exchange
     const contents = [
-      { role: "user", parts: [{ text: `You must follow these instructions exactly:\n\n${SYSTEM_PROMPT}` }] },
-      { role: "model", parts: [{ text: "Understood. I will act as the Pre-Validation Readiness Interrogator as instructed." }] },
+      { role: "user", parts: [{ text: `Follow these instructions exactly:\n\n${SYSTEM_PROMPT}` }] },
+      { role: "model", parts: [{ text: "Understood. I will act as the Pre-Validation Readiness Interrogator." }] },
       ...messages.slice(1).map((m) => ({
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content }],
       })),
     ];
-
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
       {
@@ -59,15 +61,57 @@ async function callGemini(messages: { role: string; content: string }[]): Promis
     );
     const data = await res.json();
     if (!res.ok) {
-      const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
-      console.error("Gemini error:", res.status, errMsg);
-      return { content: null, error: `Gemini ${res.status}: ${errMsg}` };
+      const err = data?.error?.message ?? `HTTP ${res.status}`;
+      console.error("[Gemini]", res.status, err);
+      return { content: null, error: err };
     }
     return { content: data.candidates?.[0]?.content?.parts?.[0]?.text ?? null };
   } catch (e) {
-    console.error("Gemini exception:", e);
+    console.error("[Gemini exception]", e);
     return { content: null, error: String(e) };
   }
+}
+
+// Provider 3: OpenRouter (mistral-7b-instruct free)
+async function callOpenRouter(messages: { role: string; content: string }[]): Promise<AIResult> {
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXTAUTH_URL ?? "https://prevalidation-test.vercel.app",
+        "X-Title": "Founder Readiness Check",
+      },
+      body: JSON.stringify({
+        model: "mistralai/mistral-7b-instruct:free",
+        messages,
+        stream: false,
+        max_tokens: 800,
+        temperature: 0.4,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const err = data?.error?.message ?? `HTTP ${res.status}`;
+      console.error("[OpenRouter]", res.status, err);
+      return { content: null, error: err };
+    }
+    return { content: data.choices?.[0]?.message?.content ?? null };
+  } catch (e) {
+    console.error("[OpenRouter exception]", e);
+    return { content: null, error: String(e) };
+  }
+}
+
+async function getAIResponse(messages: { role: string; content: string }[]): Promise<string | null> {
+  const providers = [callGroq, callGemini, callOpenRouter];
+  for (const provider of providers) {
+    const result = await provider(messages);
+    if (result.content) return result.content;
+    console.log(`[AI] Provider failed (${result.error}), trying next...`);
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -92,26 +136,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Session limit reached" }, { status: 429 });
     }
 
-    const groqMessages = [
+    const messages = [
       { role: "system", content: SYSTEM_PROMPT },
       ...session.messages.map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: message },
     ];
 
-    // Try Groq first, then Gemini
-    let result = await callGroq(groqMessages);
-    if (!result.content) {
-      console.log("Groq failed, trying Gemini. Error:", result.error);
-      result = await callGemini(groqMessages);
-    }
-
+    const content = await getAIResponse(messages);
     const encoder = new TextEncoder();
 
-    if (!result.content) {
-      const errText = `[Both AI providers failed. Groq/Gemini error logged server-side. Please try again in a moment.]`;
+    if (!content) {
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: errText })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: "All AI providers are temporarily unavailable. Please wait 30 seconds and try again." })}\n\n`));
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
           controller.close();
         },
@@ -121,15 +158,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const userMessage = { role: "user" as const, content: message, timestamp: Date.now() };
-    const assistantMessage = { role: "assistant" as const, content: result.content, timestamp: Date.now() };
-
     await updateSession(sessionId, {
-      messages: [...session.messages, userMessage, assistantMessage],
+      messages: [
+        ...session.messages,
+        { role: "user" as const, content: message, timestamp: Date.now() },
+        { role: "assistant" as const, content, timestamp: Date.now() },
+      ],
     });
 
     // Stream word by word for live feel
-    const words = result.content.split(" ");
+    const words = content.split(" ");
     const stream = new ReadableStream({
       async start(controller) {
         for (let i = 0; i < words.length; i++) {
