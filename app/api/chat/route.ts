@@ -26,38 +26,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Session limit reached" }, { status: 429 });
     }
 
-    const messages = [
-      { role: "system", content: SYSTEM_PROMPT },
-      ...session.messages.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: message },
+    // Build Gemini contents (role must be "user" or "model")
+    const contents = [
+      ...session.messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
+      { role: "user", parts: [{ text: message }] },
     ];
 
     const userMessage = { role: "user" as const, content: message, timestamp: Date.now() };
-
     const encoder = new TextEncoder();
     let fullResponse = "";
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              "Content-Type": "application/json",
-              "HTTP-Referer": process.env.NEXTAUTH_URL ?? "http://localhost:3000",
-              "X-Title": "Founder Readiness Check",
-            },
-            body: JSON.stringify({
-              model: "meta-llama/llama-3.1-8b-instruct:free",
-              messages,
-              stream: true,
-              max_tokens: 800,
-              temperature: 0.4,
-            }),
-          });
+          const apiKey = process.env.GOOGLE_AI_API_KEY;
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+                contents,
+                generationConfig: {
+                  temperature: 0.4,
+                  maxOutputTokens: 1024,
+                },
+              }),
+            }
+          );
 
           if (!response.ok) {
+            const errText = await response.text();
+            console.error("Gemini error:", response.status, errText);
             controller.enqueue(encoder.encode(`data: {"error":"AI unavailable"}\n\n`));
             controller.close();
             return;
@@ -73,16 +77,15 @@ export async function POST(req: NextRequest) {
             const lines = chunk.split("\n").filter((l) => l.startsWith("data: "));
             for (const line of lines) {
               const data = line.slice(6).trim();
-              if (data === "[DONE]") break;
               try {
                 const parsed = JSON.parse(data);
-                const token = parsed.choices?.[0]?.delta?.content;
+                const token = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (token) {
                   fullResponse += token;
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
                 }
               } catch {
-                // partial chunk
+                // partial chunk — skip
               }
             }
           }
@@ -100,7 +103,7 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
           controller.close();
         } catch (err) {
-          console.error(err);
+          console.error("Stream error:", err);
           controller.enqueue(encoder.encode(`data: {"error":"Stream failed"}\n\n`));
           controller.close();
         }

@@ -90,9 +90,12 @@ export default function ChatInterface({
             if (parsed.token) {
               accumulated += parsed.token;
               setStreamingContent(accumulated);
+            } else if (parsed.error) {
+              accumulated += `\n\n[Error: ${parsed.error}]`;
+              setStreamingContent(accumulated);
             }
           } catch {
-            // partial
+            // partial chunk — skip
           }
         }
       }
