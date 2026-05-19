@@ -5,7 +5,7 @@ import { SYSTEM_PROMPT } from "@/lib/prompt";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-async function callGroq(messages: { role: string; content: string }[]): Promise<string | null> {
+async function callGroq(messages: { role: string; content: string }[]): Promise<{ content: string | null; error?: string }> {
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -14,50 +14,59 @@ async function callGroq(messages: { role: string; content: string }[]): Promise<
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         messages,
         stream: false,
-        max_tokens: 1024,
+        max_tokens: 800,
         temperature: 0.4,
       }),
     });
-    if (!res.ok) {
-      console.error("Groq error:", res.status, await res.text());
-      return null;
-    }
     const data = await res.json();
-    return data.choices?.[0]?.message?.content ?? null;
+    if (!res.ok) {
+      const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
+      console.error("Groq error:", res.status, errMsg);
+      return { content: null, error: `Groq ${res.status}: ${errMsg}` };
+    }
+    return { content: data.choices?.[0]?.message?.content ?? null };
   } catch (e) {
     console.error("Groq exception:", e);
-    return null;
+    return { content: null, error: String(e) };
   }
 }
 
-async function callGemini(
-  contents: { role: string; parts: { text: string }[] }[]
-): Promise<string | null> {
+async function callGemini(messages: { role: string; content: string }[]): Promise<{ content: string | null; error?: string }> {
   try {
+    // gemini-pro: inject system prompt as first user/model exchange
+    const contents = [
+      { role: "user", parts: [{ text: `You must follow these instructions exactly:\n\n${SYSTEM_PROMPT}` }] },
+      { role: "model", parts: [{ text: "Understood. I will act as the Pre-Validation Readiness Interrogator as instructed." }] },
+      ...messages.slice(1).map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
+    ];
+
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents,
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+          generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
         }),
       }
     );
-    if (!res.ok) {
-      console.error("Gemini error:", res.status, await res.text());
-      return null;
-    }
     const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+    if (!res.ok) {
+      const errMsg = data?.error?.message ?? `HTTP ${res.status}`;
+      console.error("Gemini error:", res.status, errMsg);
+      return { content: null, error: `Gemini ${res.status}: ${errMsg}` };
+    }
+    return { content: data.candidates?.[0]?.content?.parts?.[0]?.text ?? null };
   } catch (e) {
     console.error("Gemini exception:", e);
-    return null;
+    return { content: null, error: String(e) };
   }
 }
 
@@ -89,23 +98,20 @@ export async function POST(req: NextRequest) {
       { role: "user", content: message },
     ];
 
-    const geminiContents = [
-      ...session.messages.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      })),
-      { role: "user", parts: [{ text: message }] },
-    ];
+    // Try Groq first, then Gemini
+    let result = await callGroq(groqMessages);
+    if (!result.content) {
+      console.log("Groq failed, trying Gemini. Error:", result.error);
+      result = await callGemini(groqMessages);
+    }
 
-    // Try Groq first, fall back to Gemini
-    let content = await callGroq(groqMessages);
-    if (!content) content = await callGemini(geminiContents);
+    const encoder = new TextEncoder();
 
-    if (!content) {
-      const encoder = new TextEncoder();
+    if (!result.content) {
+      const errText = `[Both AI providers failed. Groq/Gemini error logged server-side. Please try again in a moment.]`;
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: "I'm having trouble connecting right now. Please send your message again." })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: errText })}\n\n`));
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
           controller.close();
         },
@@ -116,16 +122,14 @@ export async function POST(req: NextRequest) {
     }
 
     const userMessage = { role: "user" as const, content: message, timestamp: Date.now() };
-    const assistantMessage = { role: "assistant" as const, content, timestamp: Date.now() };
+    const assistantMessage = { role: "assistant" as const, content: result.content, timestamp: Date.now() };
 
     await updateSession(sessionId, {
       messages: [...session.messages, userMessage, assistantMessage],
     });
 
-    // Stream content to client word by word for a live feel
-    const encoder = new TextEncoder();
-    const words = content.split(" ");
-
+    // Stream word by word for live feel
+    const words = result.content.split(" ");
     const stream = new ReadableStream({
       async start(controller) {
         for (let i = 0; i < words.length; i++) {
