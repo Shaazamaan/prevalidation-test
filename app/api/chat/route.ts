@@ -135,7 +135,7 @@ async function callOpenRouter(messages: { role: string; content: string }[]): Pr
 }
 
 async function getAIResponse(messages: { role: string; content: string }[]): Promise<string | null> {
-  const providers = [callGroq, callGemini, callNvidia, callOpenRouter];
+  const providers = [callGroq, callNvidia, callGemini, callOpenRouter];
   for (const provider of providers) {
     const result = await provider(messages);
     if (result.content) return result.content;
