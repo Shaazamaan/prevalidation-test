@@ -22,9 +22,9 @@ export async function POST(req: NextRequest) {
     const ipHash = await hashIP(ip);
 
     const count = await getRateLimitCount(ipHash);
-    if (count >= 3) {
+    if (count >= 20) {
       return NextResponse.json(
-        { error: "Rate limit: 3 sessions per hour." },
+        { error: "Rate limit: 20 sessions per hour." },
         { status: 429 }
       );
     }
