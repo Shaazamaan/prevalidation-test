@@ -1,11 +1,10 @@
-import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getAllSessions, getReport } from "@/lib/db";
+import { isAdminServer } from "@/lib/admin-auth";
 import AdminTable from "@/components/AdminTable";
 
 export default async function DashboardPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/admin");
+  if (!isAdminServer()) redirect("/admin");
 
   const sessions = await getAllSessions();
   const reports = await Promise.all(
@@ -30,12 +29,11 @@ export default async function DashboardPage() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="font-crimson text-3xl font-semibold text-white">Admin Dashboard</h1>
-          <a
-            href="/api/auth/signout"
-            className="text-sm text-[#666] hover:text-white transition"
-          >
-            Sign out
-          </a>
+          <form action="/api/admin/logout" method="POST">
+            <button type="submit" className="text-sm text-[#666] hover:text-white transition">
+              Sign out
+            </button>
+          </form>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">

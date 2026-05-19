@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
@@ -15,17 +14,21 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const result = await signIn("credentials", {
-      username,
-      password,
-      redirect: false,
-    });
-    setLoading(false);
-    if (result?.ok) {
-      router.push("/admin/dashboard");
-    } else {
-      setError("Invalid credentials.");
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      if (res.ok) {
+        router.push("/admin/dashboard");
+      } else {
+        setError("Invalid credentials.");
+      }
+    } catch {
+      setError("Network error. Try again.");
     }
+    setLoading(false);
   };
 
   return (

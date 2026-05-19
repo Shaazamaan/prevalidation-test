@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveReport, getReport, updateSession } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { isAdminRequest } from "@/lib/admin-auth";
 import type { Report } from "@/lib/db";
 
 const REQUIRED_KEYS: (keyof Report)[] = [
@@ -42,20 +42,13 @@ export async function GET(req: NextRequest) {
   const report = await getReport(sessionId);
   if (!report) return NextResponse.json({ error: "Report not found" }, { status: 404 });
 
-  const session = await auth();
-  const isAdmin = !!session?.user;
+  if (isAdminRequest(req)) return NextResponse.json(report);
 
-  if (isAdmin) {
-    return NextResponse.json(report);
-  }
-
-  const founderView = {
+  return NextResponse.json({
     verdict: report.verdict,
     verdictExplanation: report.verdictExplanation,
     mustResolveBeforeValidation: report.mustResolveBeforeValidation,
     killSignals: report.killSignals,
     finalSummary: report.finalSummary,
-  };
-
-  return NextResponse.json(founderView);
+  });
 }

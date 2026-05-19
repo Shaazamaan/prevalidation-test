@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
               "X-Title": "Founder Readiness Check",
             },
             body: JSON.stringify({
-              model: "mistralai/mistral-7b-instruct:free",
+              model: "meta-llama/llama-3.1-8b-instruct:free",
               messages,
               stream: true,
               max_tokens: 800,
