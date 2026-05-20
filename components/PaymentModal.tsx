@@ -73,9 +73,14 @@ export default function PaymentModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [rzpKeyId, setRzpKeyId] = useState(process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "");
 
   useEffect(() => {
     loadRazorpayScript();
+    fetch("/api/payment/config")
+      .then((r) => r.json())
+      .then((d: { keyId?: string }) => { if (d.keyId) setRzpKeyId(d.keyId); })
+      .catch(() => {});
   }, []);
 
   const handlePay = async () => {
@@ -107,7 +112,7 @@ export default function PaymentModal({
       const { orderId, amount } = await orderRes.json() as { orderId: string; amount: number };
 
       const rzp = new window.Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "",
+        key: rzpKeyId,
         amount,
         currency: "INR",
         name: "Devbridge",

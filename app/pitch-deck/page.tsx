@@ -41,9 +41,14 @@ export default function PitchDeckPage() {
         </div>
 
         <div className="bg-[#111] border border-[#222] rounded-xl p-5 sm:p-7 mb-6">
-          <Suspense>
-          <PitchDeckForm />
-        </Suspense>
+          <Suspense fallback={
+            <div className="flex flex-col items-center py-12 gap-3">
+              <div className="w-8 h-8 border-2 border-[#E8A838] border-t-transparent rounded-full animate-spin" />
+              <p className="text-[#555] text-sm">Loading…</p>
+            </div>
+          }>
+            <PitchDeckForm />
+          </Suspense>
         </div>
 
         <div className="space-y-2 mb-6">

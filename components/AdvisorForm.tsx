@@ -74,6 +74,7 @@ export default function AdvisorForm() {
   const [error, setError] = useState("");
   const [report, setReport] = useState<AdvisorReport | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
@@ -87,6 +88,8 @@ export default function AdvisorForm() {
     if (p.email) setProfileEmail(p.email);
     if (p.phone) setProfilePhone(`${p.countryCode ?? ""} ${p.phone ?? ""}`.trim());
     if (p.country) setProfileCountry(p.country);
+    const last = localStorage.getItem("dbk_last_advisor");
+    if (last) setLastSessionId(last);
     setIntake((prev) => ({
       ...prev,
       founderName: prev.founderName || p.name || "",
@@ -143,7 +146,10 @@ export default function AdvisorForm() {
       }
 
       setReport(data.report as AdvisorReport);
-      if (data.sessionId) setSessionId(data.sessionId);
+      if (data.sessionId) {
+        setSessionId(data.sessionId);
+        localStorage.setItem("dbk_last_advisor", data.sessionId);
+      }
     } catch {
       setError("Connection error. Please try again.");
     } finally {
@@ -233,16 +239,20 @@ export default function AdvisorForm() {
         )}
 
         {/* Geography */}
-        <div className="bg-[#111] border border-[#222] rounded-xl p-4">
-          <h3 className="text-white text-sm font-semibold mb-3">{report.geographyInsights.location} — Local Context</h3>
-          <p className="text-[#666] text-xs mb-2">{report.geographyInsights.fundingEcosystem}</p>
-          {report.geographyInsights.opportunities.map((o, i) => (
-            <p key={i} className="text-xs text-green-400 mb-1">▸ {o}</p>
-          ))}
-          {report.geographyInsights.risks.map((r, i) => (
-            <p key={i} className="text-xs text-red-400 mb-1">▾ {r}</p>
-          ))}
-        </div>
+        {report.geographyInsights && (
+          <div className="bg-[#111] border border-[#222] rounded-xl p-4">
+            <h3 className="text-white text-sm font-semibold mb-3">{report.geographyInsights.location} — Local Context</h3>
+            {report.geographyInsights.fundingEcosystem && (
+              <p className="text-[#666] text-xs mb-2">{report.geographyInsights.fundingEcosystem}</p>
+            )}
+            {report.geographyInsights.opportunities?.map((o, i) => (
+              <p key={i} className="text-xs text-green-400 mb-1">▸ {o}</p>
+            ))}
+            {report.geographyInsights.risks?.map((r, i) => (
+              <p key={i} className="text-xs text-red-400 mb-1">▾ {r}</p>
+            ))}
+          </div>
+        )}
 
         {/* Next steps */}
         {report.immediateNextSteps.length > 0 && (
@@ -304,6 +314,19 @@ export default function AdvisorForm() {
 
   return (
     <div>
+      {lastSessionId && !report && (
+        <a
+          href={`/advisor/report/${lastSessionId}`}
+          className="flex items-center justify-between bg-[#0d0d0d] border border-[#2a2a2a] rounded-xl px-4 py-3 mb-5 hover:border-[#E8A838]/40 transition group"
+        >
+          <div>
+            <p className="text-[#555] text-xs">Previous report available</p>
+            <p className="text-[#888] text-xs mt-0.5 group-hover:text-[#E8A838] transition">View your last advisor report →</p>
+          </div>
+          <span className="text-[#333] text-lg group-hover:text-[#E8A838] transition">↗</span>
+        </a>
+      )}
+
       {showPayment && (
         <PaymentModal
           description="Startup Viability Report"

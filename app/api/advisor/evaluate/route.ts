@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { buildAdvisorPrompt, type AdvisorIntake } from "@/lib/advisor-prompt";
 import { verifyPaymentSignature } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { saveAdvisorSession, hashIP } from "@/lib/db";
+import { saveAdvisorSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -147,6 +147,15 @@ export async function POST(req: NextRequest) {
     }
 
     const adminRequest = isAdminRequest(req);
+
+    if (!adminRequest) {
+      const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "unknown";
+      const ipHash = await hashIP(ip);
+      const allowed = await checkRateLimit("advisor", ipHash, 10);
+      if (!allowed) {
+        return NextResponse.json({ error: "Too many requests. Please try again later." }, { status: 429 });
+      }
+    }
     if (!adminRequest) {
       if (!payment?.orderId || !payment?.paymentId || !payment?.signature) {
         return NextResponse.json({ error: "Payment required" }, { status: 402 });
@@ -154,6 +163,9 @@ export async function POST(req: NextRequest) {
       const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature);
       if (!valid) {
         return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
+      }
+      if (await isPaymentUsed(payment.orderId)) {
+        return NextResponse.json({ error: "Payment already used" }, { status: 402 });
       }
     }
 
@@ -179,6 +191,8 @@ export async function POST(req: NextRequest) {
     const sessionId = uuidv4();
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "unknown";
     const ipHash = await hashIP(ip);
+
+    if (payment) await markPaymentUsed(payment.orderId);
 
     await saveAdvisorSession({
       id: sessionId,

@@ -53,6 +53,40 @@ export type Report = {
   finalSummary: string;
 };
 
+export type AdvisorSession = {
+  id: string;
+  tool: "advisor";
+  founderName: string;
+  email?: string;
+  phone?: string;
+  country?: string;
+  intake: Record<string, unknown>;
+  report: Record<string, unknown>;
+  pathway: string;
+  pathwayLabel: string;
+  overallScore: number;
+  createdAt: number;
+  ipHash: string;
+  adminNotes?: string;
+};
+
+export type PitchDeckSession = {
+  id: string;
+  tool: "pitch-deck";
+  founderName?: string;
+  email?: string;
+  phone?: string;
+  country?: string;
+  context?: string;
+  report: Record<string, unknown>;
+  dbScore: number;
+  grScore: number;
+  overallVerdict: string;
+  createdAt: number;
+  ipHash: string;
+  adminNotes?: string;
+};
+
 const SESSION_TTL = 90 * 24 * 60 * 60; // 90 days in seconds
 
 export async function createSession(session: Session): Promise<void> {
@@ -94,19 +128,93 @@ export async function deleteSession(id: string): Promise<void> {
   await kv.del(`report:${id}`);
 }
 
+// ── Advisor sessions ──────────────────────────────────────────────────────────
+
+export async function saveAdvisorSession(session: AdvisorSession): Promise<void> {
+  await kv.set(`advisor:${session.id}`, session, { ex: SESSION_TTL });
+}
+
+export async function getAdvisorSession(id: string): Promise<AdvisorSession | null> {
+  return kv.get<AdvisorSession>(`advisor:${id}`);
+}
+
+export async function getAllAdvisorSessions(): Promise<AdvisorSession[]> {
+  const keys = await kv.keys("advisor:*");
+  if (!keys.length) return [];
+  const sessions = await Promise.all(keys.map((k) => kv.get<AdvisorSession>(k)));
+  return (sessions.filter(Boolean) as AdvisorSession[]).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function deleteAdvisorSession(id: string): Promise<void> {
+  await kv.del(`advisor:${id}`);
+}
+
+export async function updateAdvisorNotes(id: string, adminNotes: string): Promise<void> {
+  const session = await getAdvisorSession(id);
+  if (!session) throw new Error("Advisor session not found");
+  await kv.set(`advisor:${id}`, { ...session, adminNotes }, { ex: SESSION_TTL });
+}
+
+// ── Pitch-deck sessions ───────────────────────────────────────────────────────
+
+export async function savePitchDeckSession(session: PitchDeckSession): Promise<void> {
+  await kv.set(`pitchdeck:${session.id}`, session, { ex: SESSION_TTL });
+}
+
+export async function getPitchDeckSession(id: string): Promise<PitchDeckSession | null> {
+  return kv.get<PitchDeckSession>(`pitchdeck:${id}`);
+}
+
+export async function getAllPitchDeckSessions(): Promise<PitchDeckSession[]> {
+  const keys = await kv.keys("pitchdeck:*");
+  if (!keys.length) return [];
+  const sessions = await Promise.all(keys.map((k) => kv.get<PitchDeckSession>(k)));
+  return (sessions.filter(Boolean) as PitchDeckSession[]).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function deletePitchDeckSession(id: string): Promise<void> {
+  await kv.del(`pitchdeck:${id}`);
+}
+
+export async function updatePitchDeckNotes(id: string, adminNotes: string): Promise<void> {
+  const session = await getPitchDeckSession(id);
+  if (!session) throw new Error("Pitch deck session not found");
+  await kv.set(`pitchdeck:${id}`, { ...session, adminNotes }, { ex: SESSION_TTL });
+}
+
 export async function getRateLimitCount(ipHash: string): Promise<number> {
   const count = await kv.get<number>(`ratelimit:${ipHash}`);
   return count ?? 0;
 }
 
-export async function incrementRateLimit(ipHash: string): Promise<void> {
+// Atomically increments and returns new count. Sets 1-hour TTL on first increment.
+export async function checkAndIncrementRateLimit(ipHash: string): Promise<number> {
   const key = `ratelimit:${ipHash}`;
-  const exists = await kv.get(key);
-  if (exists === null) {
-    await kv.set(key, 1, { ex: 3600 });
-  } else {
-    await kv.incr(key);
-  }
+  const count = await kv.incr(key);
+  if (count === 1) await kv.expire(key, 3600);
+  return count;
+}
+
+// Kept for backward compatibility
+export async function incrementRateLimit(ipHash: string): Promise<void> {
+  await checkAndIncrementRateLimit(ipHash);
+}
+
+// Payment replay prevention — orderId is stored for 90 days after first use
+export async function isPaymentUsed(orderId: string): Promise<boolean> {
+  return (await kv.get(`used_order:${orderId}`)) !== null;
+}
+
+export async function markPaymentUsed(orderId: string): Promise<void> {
+  await kv.set(`used_order:${orderId}`, 1, { ex: SESSION_TTL });
+}
+
+// Generic rate limiter — returns true if request is allowed, false if limit exceeded
+export async function checkRateLimit(namespace: string, ipHash: string, limit: number, windowSecs = 3600): Promise<boolean> {
+  const key = `ratelimit:${namespace}:${ipHash}`;
+  const count = await kv.incr(key);
+  if (count === 1) await kv.expire(key, windowSecs);
+  return count <= limit;
 }
 
 export async function hashIP(ip: string): Promise<string> {

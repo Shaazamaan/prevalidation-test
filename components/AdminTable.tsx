@@ -12,6 +12,12 @@ const VERDICT_BADGE: Record<string, string> = {
   "NOT READY": "bg-red-900/40 text-red-400 border-red-800",
 };
 
+function sanitizeCSVCell(v: string | number | null | undefined): string {
+  const s = String(v ?? "");
+  const safe = /^[=+\-@\t\r]/.test(s) ? `\t${s}` : s;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
 function exportCSV(sessions: EnrichedSession[]) {
   const headers = [
     "Name", "Email", "Phone", "Country", "Startup Idea", "Startup Type", "Verdict", "Reality Score",
@@ -22,15 +28,18 @@ function exportCSV(sessions: EnrichedSession[]) {
     s.email ?? "",
     s.phone ?? "",
     s.country ?? "",
-    `"${(s.startupIdea ?? "").replace(/"/g, '""')}"`,
+    s.startupIdea ?? "",
     s.startupType ?? "",
     s.report?.verdict ?? "",
     s.report?.realityScore ?? "",
     s.status,
     new Date(s.createdAt).toISOString(),
-    `"${(s.adminNotes ?? "").replace(/"/g, '""')}"`,
+    s.adminNotes ?? "",
   ]);
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const csv = [
+    headers.map(sanitizeCSVCell).join(","),
+    ...rows.map((r) => r.map(sanitizeCSVCell).join(",")),
+  ].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

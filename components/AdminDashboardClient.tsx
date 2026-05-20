@@ -5,10 +5,65 @@ import Link from "next/link";
 import AdminTable from "@/components/AdminTable";
 import type { Session, Report, AdvisorSession, PitchDeckSession } from "@/lib/db";
 
+function InlineNotes({ id, endpoint, initial }: { id: string; endpoint: string; initial?: string }) {
+  const [notes, setNotes] = useState(initial ?? "");
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, adminNotes: notes }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className={`text-xs mt-2 ${notes ? "text-[#888]" : "text-[#444] hover:text-[#666]"} transition text-left w-full`}
+      >
+        {notes ? `📝 ${notes}` : saved ? "✓ Saved" : "+ Add note"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex gap-2 items-start">
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows={2}
+        placeholder="Admin notes…"
+        className="flex-1 text-xs bg-[#0d0d0d] border border-[#333] rounded-lg px-2 py-1.5 text-[#888] placeholder-[#444] focus:outline-none focus:border-[#E8A838] resize-none"
+        autoFocus
+      />
+      <div className="flex flex-col gap-1">
+        <button onClick={save} disabled={saving} className="text-xs px-2 py-1 bg-[#E8A838] text-black rounded font-medium disabled:opacity-50">
+          {saving ? "…" : "Save"}
+        </button>
+        <button onClick={() => setEditing(false)} className="text-xs px-2 py-1 text-[#444] hover:text-white">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type EnrichedSession = Session & { report: Report | null };
 
 function exportAdvisorCSV(sessions: AdvisorSession[]) {
-  const headers = ["Name", "Email", "Phone", "Country", "Pathway", "Pathway Label", "Overall Score", "Created At"];
+  const headers = ["Name", "Email", "Phone", "Country", "Pathway", "Pathway Label", "Overall Score", "Created At", "Admin Notes"];
   const rows = sessions.map((s) => [
     s.founderName,
     s.email ?? "",
@@ -18,12 +73,13 @@ function exportAdvisorCSV(sessions: AdvisorSession[]) {
     s.pathwayLabel,
     s.overallScore,
     new Date(s.createdAt).toISOString(),
+    s.adminNotes ?? "",
   ]);
   downloadCSV([headers, ...rows], `advisor-sessions-${new Date().toISOString().slice(0, 10)}.csv`);
 }
 
 function exportPitchDeckCSV(sessions: PitchDeckSession[]) {
-  const headers = ["Name", "Email", "Phone", "Country", "DB Score", "GR Score", "Verdict", "Created At"];
+  const headers = ["Name", "Email", "Phone", "Country", "DB Score", "GR Score", "Verdict", "Created At", "Admin Notes"];
   const rows = sessions.map((s) => [
     s.founderName ?? "",
     s.email ?? "",
@@ -33,12 +89,20 @@ function exportPitchDeckCSV(sessions: PitchDeckSession[]) {
     s.grScore,
     s.overallVerdict,
     new Date(s.createdAt).toISOString(),
+    s.adminNotes ?? "",
   ]);
   downloadCSV([headers, ...rows], `pitchdeck-sessions-${new Date().toISOString().slice(0, 10)}.csv`);
 }
 
+function sanitizeCSVCell(v: string | number): string {
+  const s = String(v);
+  // Prevent formula injection: prefix dangerous-start chars with a tab
+  const safe = /^[=+\-@\t\r]/.test(s) ? `\t${s}` : s;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
 function downloadCSV(rows: (string | number)[][], filename: string) {
-  const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const csv = rows.map((r) => r.map(sanitizeCSVCell).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -70,6 +134,7 @@ function AdvisorSessionsTable({ sessions }: { sessions: AdvisorSession[] }) {
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const filtered = sessions.filter((s) =>
     s.founderName.toLowerCase().includes(search.toLowerCase()) ||
@@ -79,13 +144,17 @@ function AdvisorSessionsTable({ sessions }: { sessions: AdvisorSession[] }) {
 
   const handleDelete = async (id: string) => {
     setDeleting(id);
+    setDeleteError("");
     try {
-      await fetch("/api/admin/advisor", {
+      const res = await fetch("/api/admin/advisor", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
+      if (!res.ok) throw new Error("Delete failed");
       window.location.reload();
+    } catch {
+      setDeleteError("Failed to delete. Please try again.");
     } finally {
       setDeleting(null);
       setConfirmDelete(null);
@@ -108,6 +177,7 @@ function AdvisorSessionsTable({ sessions }: { sessions: AdvisorSession[] }) {
           Export CSV
         </button>
       </div>
+      {deleteError && <p className="text-red-400 text-xs mb-3">{deleteError}</p>}
 
       {filtered.length === 0 ? (
         <p className="text-[#444] text-sm text-center py-8">No advisor sessions yet.</p>
@@ -132,6 +202,7 @@ function AdvisorSessionsTable({ sessions }: { sessions: AdvisorSession[] }) {
                 </div>
               </div>
               <p className="text-[#666] text-xs mt-1">{s.pathwayLabel}</p>
+              <InlineNotes id={s.id} endpoint="/api/admin/advisor" initial={s.adminNotes} />
               <div className="flex items-center justify-between mt-3">
                 <p className="text-[#444] text-xs">{new Date(s.createdAt).toLocaleDateString()}</p>
                 <div className="flex gap-2">
@@ -177,6 +248,7 @@ function PitchDeckSessionsTable({ sessions }: { sessions: PitchDeckSession[] }) 
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const filtered = sessions.filter((s) =>
     (s.founderName ?? "").toLowerCase().includes(search.toLowerCase()) ||
@@ -187,13 +259,17 @@ function PitchDeckSessionsTable({ sessions }: { sessions: PitchDeckSession[] }) 
 
   const handleDelete = async (id: string) => {
     setDeleting(id);
+    setDeleteError("");
     try {
-      await fetch("/api/admin/pitch-deck", {
+      const res = await fetch("/api/admin/pitch-deck", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
+      if (!res.ok) throw new Error("Delete failed");
       window.location.reload();
+    } catch {
+      setDeleteError("Failed to delete. Please try again.");
     } finally {
       setDeleting(null);
       setConfirmDelete(null);
@@ -216,6 +292,7 @@ function PitchDeckSessionsTable({ sessions }: { sessions: PitchDeckSession[] }) 
           Export CSV
         </button>
       </div>
+      {deleteError && <p className="text-red-400 text-xs mb-3">{deleteError}</p>}
 
       {filtered.length === 0 ? (
         <p className="text-[#444] text-sm text-center py-8">No pitch deck sessions yet.</p>
@@ -241,6 +318,7 @@ function PitchDeckSessionsTable({ sessions }: { sessions: PitchDeckSession[] }) 
                   </div>
                 </div>
               </div>
+              <InlineNotes id={s.id} endpoint="/api/admin/pitch-deck" initial={s.adminNotes} />
               <div className="flex items-center justify-between mt-3">
                 <p className="text-[#444] text-xs">{new Date(s.createdAt).toLocaleDateString()}</p>
                 <div className="flex gap-2">

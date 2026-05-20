@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, updateSession, saveReport } from "@/lib/db";
+import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed } from "@/lib/db";
 import { buildEvaluationPrompt } from "@/lib/evaluate-prompt";
 import { verifyPaymentSignature } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
@@ -230,6 +230,9 @@ export async function POST(req: NextRequest) {
       if (!valid) {
         return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
       }
+      if (await isPaymentUsed(payment.orderId)) {
+        return NextResponse.json({ error: "Payment already used" }, { status: 402 });
+      }
     }
 
     const session = await getSession(sessionId);
@@ -285,6 +288,7 @@ export async function POST(req: NextRequest) {
     await Promise.all([
       saveReport(sessionId, report),
       updateSession(sessionId, { status: "completed", messages }),
+      ...(payment ? [markPaymentUsed(payment.orderId)] : []),
     ]);
 
     return NextResponse.json({ success: true });

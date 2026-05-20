@@ -4,8 +4,7 @@ import {
   createSession,
   getSession,
   hashIP,
-  getRateLimitCount,
-  incrementRateLimit,
+  checkAndIncrementRateLimit,
 } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
@@ -21,15 +20,13 @@ export async function POST(req: NextRequest) {
       "unknown";
     const ipHash = await hashIP(ip);
 
-    const count = await getRateLimitCount(ipHash);
-    if (count >= 5) {
+    const count = await checkAndIncrementRateLimit(ipHash);
+    if (count > 5) {
       return NextResponse.json(
         { error: "Rate limit: 5 sessions per hour." },
         { status: 429 }
       );
     }
-
-    await incrementRateLimit(ipHash);
 
     const id = uuidv4();
     await createSession({

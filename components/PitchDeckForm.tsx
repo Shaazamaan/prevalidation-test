@@ -62,6 +62,7 @@ export default function PitchDeckForm() {
   const [error, setError] = useState("");
   const [report, setReport] = useState<PitchDeckReport | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [profile, setProfile] = useState<{ name?: string; email?: string; phone?: string; country?: string }>({});
 
@@ -73,6 +74,8 @@ export default function PitchDeckForm() {
       phone: p.phone ? `${p.countryCode ?? ""} ${p.phone}`.trim() : undefined,
       country: p.country,
     });
+    const last = localStorage.getItem("dbk_last_pitchdeck");
+    if (last) setLastSessionId(last);
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,11 +100,15 @@ export default function PitchDeckForm() {
     setError("");
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-      const fileBase64 = btoa(binary);
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
 
       const res = await fetch("/api/pitch-deck/evaluate", {
         method: "POST",
@@ -127,7 +134,10 @@ export default function PitchDeckForm() {
       }
 
       setReport(data.report as PitchDeckReport);
-      if (data.sessionId) setSessionId(data.sessionId);
+      if (data.sessionId) {
+        setSessionId(data.sessionId);
+        localStorage.setItem("dbk_last_pitchdeck", data.sessionId);
+      }
     } catch {
       setError("Connection error. Please try again.");
     } finally {
@@ -345,6 +355,19 @@ export default function PitchDeckForm() {
 
   return (
     <div className="space-y-5">
+      {lastSessionId && !report && (
+        <a
+          href={`/pitch-deck/report/${lastSessionId}`}
+          className="flex items-center justify-between bg-[#0d0d0d] border border-[#2a2a2a] rounded-xl px-4 py-3 hover:border-[#E8A838]/40 transition group"
+        >
+          <div>
+            <p className="text-[#555] text-xs">Previous report available</p>
+            <p className="text-[#888] text-xs mt-0.5 group-hover:text-[#E8A838] transition">View your last pitch deck report →</p>
+          </div>
+          <span className="text-[#333] text-lg group-hover:text-[#E8A838] transition">↗</span>
+        </a>
+      )}
+
       {showPayment && (
         <PaymentModal
           description="Pitch Deck Evaluation Report"
