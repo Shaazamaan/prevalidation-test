@@ -35,6 +35,7 @@ export interface PaymentResult {
   orderId: string;
   paymentId: string;
   signature: string;
+  couponToken?: string;
 }
 
 interface Props {
@@ -75,6 +76,12 @@ export default function PaymentModal({
   const [agreed, setAgreed] = useState(false);
   const [rzpKeyId, setRzpKeyId] = useState(process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "");
 
+  const [coupon, setCoupon] = useState("");
+  const [couponStatus, setCouponStatus] = useState<null | "valid" | "invalid" | "checking">(null);
+  const [discount, setDiscount] = useState(0);
+  const [free, setFree] = useState(false);
+  const [couponToken, setCouponToken] = useState<string | undefined>(undefined);
+
   useEffect(() => {
     loadRazorpayScript();
     fetch("/api/payment/config")
@@ -83,10 +90,46 @@ export default function PaymentModal({
       .catch(() => {});
   }, []);
 
+  const applyCoupon = async () => {
+    if (!coupon.trim()) return;
+    setCouponStatus("checking");
+    try {
+      const emailParam = founderEmail ? `&email=${encodeURIComponent(founderEmail)}` : "";
+      const res = await fetch(`/api/payment/validate-coupon?code=${encodeURIComponent(coupon.trim())}${emailParam}`);
+      const data = await res.json() as { valid: boolean; discount?: number; free?: boolean; couponToken?: string };
+      if (data.valid) {
+        setCouponStatus("valid");
+        setDiscount(data.discount ?? 0);
+        setFree(data.free ?? false);
+        setCouponToken(data.couponToken);
+      } else {
+        setCouponStatus("invalid");
+        setDiscount(0);
+        setFree(false);
+        setCouponToken(undefined);
+      }
+    } catch {
+      setCouponStatus("invalid");
+    }
+  };
+
+  const discountedAmount = discount > 0 ? Math.round(99900 * (1 - discount / 100)) : 99900;
+  const displayPrice = discount > 0 ? `₹${(discountedAmount / 100).toLocaleString("en-IN")}` : "₹999";
+
   const handlePay = async () => {
     if (!agreed) return;
     setLoading(true);
     setError("");
+
+    if (free) {
+      onSuccess({
+        orderId: `FREE_${coupon.trim().toUpperCase()}`,
+        paymentId: "FREE",
+        signature: couponToken ?? "",
+        couponToken,
+      });
+      return;
+    }
 
     try {
       const loaded = await loadRazorpayScript();
@@ -99,11 +142,11 @@ export default function PaymentModal({
       const orderRes = await fetch("/api/payment/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receipt }),
+        body: JSON.stringify({ receipt, discount: discount > 0 ? discount : undefined }),
       });
 
       if (!orderRes.ok) {
-        const d = await orderRes.json();
+        const d = await orderRes.json() as { error?: string };
         setError(d.error ?? "Failed to create payment order.");
         setLoading(false);
         return;
@@ -123,6 +166,7 @@ export default function PaymentModal({
             orderId: response.razorpay_order_id,
             paymentId: response.razorpay_payment_id,
             signature: response.razorpay_signature,
+            couponToken,
           });
         },
         prefill: {
@@ -151,22 +195,49 @@ export default function PaymentModal({
         <h2 className="font-crimson text-2xl text-white mb-1">Generate Your Report</h2>
         <p className="text-[#666] text-sm mb-5">One-time payment · AI evaluation delivered instantly.</p>
 
-        {/* Price */}
         <div className="bg-[#0d0d0d] border border-[#222] rounded-xl p-4 mb-4">
           <div className="flex items-center justify-between">
             <span className="text-[#888] text-sm">{description}</span>
-            <span className="text-[#E8A838] font-bold text-xl">₹999</span>
+            <div className="text-right">
+              {discount > 0 && (
+                <span className="text-[#555] text-sm line-through mr-2">₹999</span>
+              )}
+              <span className="text-[#E8A838] font-bold text-xl">{displayPrice}</span>
+            </div>
           </div>
+          {couponStatus === "valid" && (
+            <p className="text-green-400 text-xs mt-1">
+              {free ? "100% off — Free!" : `${discount}% off applied`}
+            </p>
+          )}
           <p className="text-xs text-[#444] mt-1">Includes full report, scores, and next steps.</p>
         </div>
 
-        {/* Disclaimer */}
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={coupon}
+            onChange={(e) => { setCoupon(e.target.value.toUpperCase()); setCouponStatus(null); setDiscount(0); setFree(false); setCouponToken(undefined); }}
+            placeholder="Coupon code"
+            className="flex-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white text-sm placeholder-[#444] focus:outline-none focus:border-[#E8A838] transition"
+          />
+          <button
+            onClick={applyCoupon}
+            disabled={!coupon.trim() || couponStatus === "checking"}
+            className="px-4 py-2 text-sm bg-[#1a1a1a] border border-[#2a2a2a] text-[#888] rounded-lg hover:border-[#E8A838] hover:text-white transition disabled:opacity-50"
+          >
+            {couponStatus === "checking" ? "…" : "Apply"}
+          </button>
+        </div>
+        {couponStatus === "invalid" && (
+          <p className="text-red-400 text-xs mb-3">Invalid or expired code.</p>
+        )}
+
         <div className="bg-amber-900/10 border border-amber-800/30 rounded-xl p-3 mb-4">
           <p className="text-xs text-[#666] uppercase tracking-wide mb-2 font-medium">Important Disclaimer</p>
           <p className="text-xs text-[#777] leading-relaxed">{DISCLAIMER}</p>
         </div>
 
-        {/* Agree checkbox */}
         <label className="flex items-start gap-3 mb-4 cursor-pointer group">
           <input
             type="checkbox"
@@ -201,12 +272,12 @@ export default function PaymentModal({
             disabled={loading || !agreed}
             className="flex-1 bg-[#E8A838] text-black font-semibold py-3 rounded-xl text-sm hover:bg-[#d4962e] transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {loading ? "Opening…" : "Pay ₹999"}
+            {loading ? "Opening…" : free ? "Get Report Free →" : `Pay ${displayPrice}`}
           </button>
         </div>
 
         <p className="text-center text-xs text-[#333] mt-4">
-          Secured by Razorpay · UPI · Cards · Net Banking
+          {free ? "No payment required · Free access code applied" : "Secured by Razorpay · UPI · Cards · Net Banking"}
         </p>
       </div>
     </div>

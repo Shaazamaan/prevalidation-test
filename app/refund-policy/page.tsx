@@ -70,7 +70,7 @@ export default function RefundPolicyPage() {
           <section>
             <h2 className="text-white text-lg font-semibold mb-3">How to Request a Refund</h2>
             <p>
-              Email us at <span className="text-[#E8A838]">support@devbridge.in</span> with:
+              <Link href="/contact" className="text-[#E8A838] hover:underline">Contact us here</Link> with:
             </p>
             <ul className="list-disc pl-5 space-y-2 mt-2">
               <li>Your Razorpay Payment ID (found in your payment confirmation email)</li>
@@ -95,8 +95,7 @@ export default function RefundPolicyPage() {
           <section>
             <h2 className="text-white text-lg font-semibold mb-3">Contact</h2>
             <p>
-              For any refund-related queries:{" "}
-              <span className="text-[#E8A838]">support@devbridge.in</span>
+              For any refund-related queries, <Link href="/contact" className="text-[#E8A838] hover:underline">contact us here</Link>.
             </p>
           </section>
         </div>

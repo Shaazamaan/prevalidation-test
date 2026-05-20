@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import AdminTable from "@/components/AdminTable";
 import type { Session, Report, AdvisorSession, PitchDeckSession } from "@/lib/db";
@@ -130,11 +130,58 @@ const VERDICT_BADGE: Record<string, string> = {
   "NOT GRANT READY": "text-orange-400 border-orange-800 bg-orange-900/20",
 };
 
+function RevenueChart({ days, dayCounts }: { days: string[]; dayCounts: number[] }) {
+  const max = Math.max(...dayCounts, 1);
+  const allZero = dayCounts.every((c) => c === 0);
+
+  if (allZero) {
+    return (
+      <div className="bg-[#111] border border-[#222] rounded-xl p-4 mb-6">
+        <p className="text-xs text-[#555] uppercase mb-3">Last 7 Days</p>
+        <p className="text-[#444] text-sm text-center py-4">No sessions yet this week</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[#111] border border-[#222] rounded-xl p-4 mb-6">
+      <p className="text-xs text-[#555] uppercase mb-4">Last 7 Days</p>
+      <div className="flex items-end gap-2 h-24">
+        {dayCounts.map((count, i) => {
+          const heightPct = Math.max((count / max) * 100, count > 0 ? 8 : 4);
+          return (
+            <div key={i} className="flex-1 flex flex-col items-center gap-1">
+              {count > 0 && (
+                <span className="text-[10px] text-[#888]">{count}</span>
+              )}
+              <div
+                className="w-full rounded-t"
+                style={{
+                  height: `${heightPct}%`,
+                  background: count > 0 ? "#E8A838" : "#222",
+                  minHeight: 4,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-2 mt-1">
+        {days.map((d, i) => (
+          <div key={i} className="flex-1 text-center text-[9px] text-[#444] truncate">{d}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AdvisorSessionsTable({ sessions }: { sessions: AdvisorSession[] }) {
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const [reEvaluating, setReEvaluating] = useState<string | null>(null);
+  const [reEvalResult, setReEvalResult] = useState<Record<string, string>>({});
 
   const filtered = sessions.filter((s) =>
     s.founderName.toLowerCase().includes(search.toLowerCase()) ||
@@ -158,6 +205,28 @@ function AdvisorSessionsTable({ sessions }: { sessions: AdvisorSession[] }) {
     } finally {
       setDeleting(null);
       setConfirmDelete(null);
+    }
+  };
+
+  const handleReEvaluate = async (s: AdvisorSession) => {
+    setReEvaluating(s.id);
+    try {
+      const res = await fetch("/api/advisor/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ intake: s.intake }),
+      });
+      const data = await res.json() as { sessionId?: string; error?: string };
+      if (!res.ok || !data.sessionId) {
+        setReEvalResult((prev) => ({ ...prev, [s.id]: `Error: ${data.error ?? "Failed"}` }));
+      } else {
+        setReEvalResult((prev) => ({ ...prev, [s.id]: data.sessionId! }));
+      }
+    } catch {
+      setReEvalResult((prev) => ({ ...prev, [s.id]: "Error: Connection failed" }));
+    } finally {
+      setReEvaluating(null);
     }
   };
 
@@ -203,9 +272,34 @@ function AdvisorSessionsTable({ sessions }: { sessions: AdvisorSession[] }) {
               </div>
               <p className="text-[#666] text-xs mt-1">{s.pathwayLabel}</p>
               <InlineNotes id={s.id} endpoint="/api/admin/advisor" initial={s.adminNotes} />
+              {reEvalResult[s.id] && (
+                <div className="mt-2 text-xs">
+                  {reEvalResult[s.id].startsWith("Error") ? (
+                    <span className="text-red-400">{reEvalResult[s.id]}</span>
+                  ) : (
+                    <span className="text-green-400">
+                      Re-evaluated · New report:{" "}
+                      <a
+                        href={`/advisor/report/${reEvalResult[s.id]}`}
+                        target="_blank"
+                        className="underline"
+                      >
+                        /advisor/report/{reEvalResult[s.id]}
+                      </a>
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center justify-between mt-3">
                 <p className="text-[#444] text-xs">{new Date(s.createdAt).toLocaleDateString()}</p>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => handleReEvaluate(s)}
+                    disabled={reEvaluating === s.id}
+                    className="text-xs text-[#666] hover:text-[#E8A838] transition disabled:opacity-50"
+                  >
+                    {reEvaluating === s.id ? "Re-evaluating…" : "Re-evaluate"}
+                  </button>
                   <Link
                     href={`/advisor/report/${s.id}`}
                     target="_blank"
@@ -367,15 +461,72 @@ export default function AdminDashboardClient({
   readinessSessions,
   advisorSessions,
   pitchDeckSessions,
+  days,
+  dayCounts,
 }: {
   readinessSessions: EnrichedSession[];
   advisorSessions: AdvisorSession[];
   pitchDeckSessions: PitchDeckSession[];
+  days: string[];
+  dayCounts: number[];
 }) {
   const [tab, setTab] = useState<Tab>("Readiness Check");
+  const [sitePaused, setSitePaused] = useState(false);
+  const [siteControlLoading, setSiteControlLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/site-control", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => { if (typeof d.paused === "boolean") setSitePaused(d.paused); })
+      .catch(() => {});
+  }, []);
+
+  const handleSiteControl = async (action: string) => {
+    setSiteControlLoading(true);
+    try {
+      const res = await fetch("/api/admin/site-control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action }),
+      });
+      const d = await res.json();
+      if (typeof d.paused === "boolean") setSitePaused(d.paused);
+    } catch {}
+    setSiteControlLoading(false);
+  };
 
   return (
     <div>
+      {/* Site Control */}
+      <div className="bg-[#111] border border-[#222] rounded-xl p-4 mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-white text-sm font-semibold">Site Status</p>
+            <p className={`text-xs mt-0.5 ${sitePaused ? "text-red-400" : "text-green-400"}`}>
+              {sitePaused ? "🔴 PAUSED — All evaluations blocked" : "🟢 LIVE — All services running"}
+            </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => handleSiteControl(sitePaused ? "resume" : "pause")}
+              disabled={siteControlLoading}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50 ${
+                sitePaused ? "bg-green-600 hover:bg-green-500 text-white" : "bg-red-800/40 hover:bg-red-700/40 border border-red-800/50 text-red-400"
+              }`}>
+              {sitePaused ? "Resume Site" : "Pause Site"}
+            </button>
+            <button
+              onClick={() => handleSiteControl("credit_alert")}
+              disabled={siteControlLoading}
+              className="text-xs px-3 py-1.5 rounded-lg border border-amber-800/50 text-amber-400 hover:bg-amber-900/20 transition disabled:opacity-50">
+              🚨 Low Credit Alert
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <RevenueChart days={days} dayCounts={dayCounts} />
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-[#1a1a1a]">
         {TABS.map((t) => (

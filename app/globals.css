@@ -25,3 +25,39 @@ body {
 }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ── Light mode overrides ─────────────────────────────────────────── */
+html.light body {
+  background-color: #f5f3ee !important;
+  color: #1a1a1a !important;
+}
+html.light main { background-color: #f5f3ee !important; }
+
+html.light .bg-\[#0a0a0a\] { background-color: #f5f3ee !important; }
+html.light .bg-\[#111\] { background-color: #ffffff !important; }
+html.light .bg-\[#0d0d0d\] { background-color: #ede9e2 !important; }
+html.light .bg-\[#1a1a1a\] { background-color: #f2f0eb !important; }
+html.light .bg-\[#111111\] { background-color: #ffffff !important; }
+
+html.light .border-\[#222\] { border-color: #d8d3cc !important; }
+html.light .border-\[#2a2a2a\] { border-color: #ddd8d0 !important; }
+html.light .border-\[#1a1a1a\] { border-color: #e8e4dd !important; }
+html.light .border-\[#333\] { border-color: #ccc8c0 !important; }
+
+html.light .text-white { color: #1a1a1a !important; }
+html.light .text-\[#ccc\] { color: #3a3a3a !important; }
+html.light .text-\[#888\] { color: #555 !important; }
+html.light .text-\[#666\] { color: #444 !important; }
+html.light .text-\[#555\] { color: #666 !important; }
+html.light .text-\[#444\] { color: #888 !important; }
+html.light .text-\[#333\] { color: #aaa !important; }
+
+html.light .placeholder-\[#444\]::placeholder { color: #999 !important; }
+html.light .placeholder-\[#444\]::-webkit-input-placeholder { color: #999 !important; }
+
+html.light .text-black { color: #000 !important; }
+
+/* Preserve amber/accent colors in light mode */
+html.light .text-\[#E8A838\] { color: #c8881a !important; }
+html.light .bg-\[#E8A838\] { background-color: #E8A838 !important; }
+html.light .border-\[#E8A838\] { border-color: #E8A838 !important; }

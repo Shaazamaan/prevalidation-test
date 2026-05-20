@@ -18,10 +18,15 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ username, password }),
       });
       if (res.ok) {
         router.push("/admin/dashboard");
+      } else if (res.status === 429) {
+        setError("Too many attempts. Try again in 1 hour.");
+      } else if (res.status === 500) {
+        setError("Server error — check environment variables.");
       } else {
         setError("Invalid credentials.");
       }
@@ -65,6 +70,9 @@ export default function AdminLoginPage() {
             {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
+        <p className="text-center text-xs text-[#333] mt-4">
+          Admin login requires ADMIN_USERNAME and ADMIN_PASSWORD environment variables set in Vercel.
+        </p>
       </div>
     </main>
   );

@@ -217,10 +217,90 @@ export async function checkRateLimit(namespace: string, ipHash: string, limit: n
   return count <= limit;
 }
 
+export async function isCouponUsed(code: string): Promise<boolean> {
+  return (await kv.get(`coupon_used:${code}`)) !== null;
+}
+
+export async function markCouponUsed(code: string): Promise<void> {
+  await kv.set(`coupon_used:${code}`, 1);
+}
+
 export async function hashIP(ip: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(ip + "salt_prevalidation");
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// ── Site control ────────────────────────────────────────────────────────────
+
+export async function isSitePaused(): Promise<boolean> {
+  return (await kv.get("site:paused")) === true;
+}
+
+export async function setSitePaused(paused: boolean): Promise<void> {
+  if (paused) {
+    await kv.set("site:paused", true);
+  } else {
+    await kv.del("site:paused");
+  }
+}
+
+// ── Coupon tracking ─────────────────────────────────────────────────────────
+
+export async function incrementCouponUsage(code: string, email: string): Promise<void> {
+  const key = `coupon:${code.toUpperCase()}`;
+  const current = await kv.get<{ count: number; emails: string[] }>(key) ?? { count: 0, emails: [] };
+  await kv.set(key, { count: current.count + 1, emails: [...current.emails, email].slice(-100) });
+}
+
+export async function getCouponUsage(code: string): Promise<{ count: number; emails: string[] }> {
+  return (await kv.get<{ count: number; emails: string[] }>(`coupon:${code.toUpperCase()}`)) ?? { count: 0, emails: [] };
+}
+
+export async function getAllCouponStats(): Promise<{ code: string; count: number; emails: string[] }[]> {
+  const keys = await kv.keys("coupon:*");
+  if (!keys.length) return [];
+  const results = await Promise.all(
+    keys.map(async (k) => {
+      const code = k.replace("coupon:", "");
+      const data = await kv.get<{ count: number; emails: string[] }>(k) ?? { count: 0, emails: [] };
+      return { code, ...data };
+    })
+  );
+  return results.sort((a, b) => b.count - a.count);
+}
+
+export async function isEmailCouponUsed(code: string, email: string): Promise<boolean> {
+  return (await kv.get(`coupon_email:${code.toUpperCase()}:${email.toLowerCase()}`)) !== null;
+}
+
+export async function markEmailCouponUsed(code: string, email: string): Promise<void> {
+  await kv.set(`coupon_email:${code.toUpperCase()}:${email.toLowerCase()}`, 1);
+}
+
+// ── PWA subscriptions ───────────────────────────────────────────────────────
+
+export type PushSubscription = {
+  endpoint: string;
+  keys: { auth: string; p256dh: string };
+  installedAt: number;
+};
+
+export async function savePushSubscription(sub: PushSubscription): Promise<void> {
+  const key = `pwa:sub:${Buffer.from(sub.endpoint).toString("base64").slice(0, 40)}`;
+  await kv.set(key, sub, { ex: 365 * 24 * 60 * 60 });
+  await kv.incr("pwa:install:count");
+}
+
+export async function getAllPushSubscriptions(): Promise<PushSubscription[]> {
+  const keys = await kv.keys("pwa:sub:*");
+  if (!keys.length) return [];
+  const subs = await Promise.all(keys.map((k) => kv.get<PushSubscription>(k)));
+  return subs.filter(Boolean) as PushSubscription[];
+}
+
+export async function getPWAInstallCount(): Promise<number> {
+  return (await kv.get<number>("pwa:install:count")) ?? 0;
 }

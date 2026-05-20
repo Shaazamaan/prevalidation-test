@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed } from "@/lib/db";
+import crypto from "crypto";
+import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage } from "@/lib/db";
 import { buildEvaluationPrompt } from "@/lib/evaluate-prompt";
 import { verifyPaymentSignature } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
@@ -137,6 +138,16 @@ async function callOpenRouter(prompt: string): Promise<AIResult> {
   }
 }
 
+function verifyCouponToken(code: string, token: string): boolean {
+  const secret = process.env.NEXTAUTH_SECRET ?? "";
+  const now = Math.floor(Date.now() / 1000 / 600);
+  for (const w of [now, now - 1]) {
+    const expected = crypto.createHmac("sha256", secret).update(`${code}:${w}`).digest("hex");
+    if (expected === token) return true;
+  }
+  return false;
+}
+
 async function raceFirst(fns: (() => Promise<AIResult>)[]): Promise<string | null> {
   return new Promise((resolve) => {
     let settled = 0;
@@ -220,18 +231,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    // Payment required unless this is an admin re-evaluate call
+    const isFreeOrder = payment?.orderId?.startsWith("FREE_");
+    const couponCode = isFreeOrder ? payment!.orderId.replace("FREE_", "") : undefined;
+
     const adminRequest = isAdminRequest(req);
+
+    const paused = await isSitePaused();
+    if (paused && !adminRequest) {
+      return NextResponse.json({
+        error: "🚧 Our ATM machine is empty — we're refilling it! The army is on the way. Please try again in a little while. We apologize for the inconvenience! 💛"
+      }, { status: 503 });
+    }
     if (!adminRequest) {
       if (!payment?.orderId || !payment?.paymentId || !payment?.signature) {
         return NextResponse.json({ error: "Payment required" }, { status: 402 });
       }
-      const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature);
-      if (!valid) {
-        return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
-      }
-      if (await isPaymentUsed(payment.orderId)) {
-        return NextResponse.json({ error: "Payment already used" }, { status: 402 });
+      if (isFreeOrder && couponCode) {
+        const tokenValid = verifyCouponToken(couponCode, payment.signature);
+        if (!tokenValid) return NextResponse.json({ error: "Invalid coupon token" }, { status: 402 });
+        if (await isCouponUsed(couponCode)) return NextResponse.json({ error: "Coupon already used" }, { status: 402 });
+      } else {
+        const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature);
+        if (!valid) {
+          return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
+        }
+        if (await isPaymentUsed(payment.orderId)) {
+          return NextResponse.json({ error: "Payment already used" }, { status: 402 });
+        }
       }
     }
 
@@ -288,7 +314,10 @@ export async function POST(req: NextRequest) {
     await Promise.all([
       saveReport(sessionId, report),
       updateSession(sessionId, { status: "completed", messages }),
-      ...(payment ? [markPaymentUsed(payment.orderId)] : []),
+      ...(isFreeOrder && couponCode ? [
+        markCouponUsed(couponCode),
+        ...(session.email ? [markEmailCouponUsed(couponCode, session.email), incrementCouponUsage(couponCode, session.email)] : [incrementCouponUsage(couponCode, "unknown")]),
+      ] : payment && !isFreeOrder ? [markPaymentUsed(payment.orderId)] : []),
     ]);
 
     return NextResponse.json({ success: true });

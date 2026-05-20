@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { getAdvisorSession } from "@/lib/db";
 import Link from "next/link";
-import PrintButton from "@/components/PrintButton";
+import ShareBar, { StickyShareBar } from "@/components/ShareBar";
+import BackToTop from "@/components/BackToTop";
 
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const s = await getAdvisorSession(params.id);
@@ -47,6 +48,13 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
   const report = session.report as unknown as AdvisorReport;
   const pathwayColor = PATHWAY_COLORS[report.pathway] ?? "text-[#E8A838] border-[#444] bg-[#111]";
 
+  const EXPIRY_MS = 90 * 24 * 60 * 60 * 1000;
+  const expiresAt = session.createdAt + EXPIRY_MS;
+  const daysLeft = Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
+  const expiringSoon = daysLeft <= 14;
+
+  const reportPath = `/advisor/report/${session.id}`;
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] py-10 px-4 print:bg-white print:py-6">
       <style>{`
@@ -61,12 +69,12 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           .text-\\[\\#444\\] { color: #666 !important; }
         }
       `}</style>
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto pb-16 sm:pb-0">
         <div className="flex items-center justify-between mb-6 print:hidden">
           <Link href="/" className="text-[#555] text-sm hover:text-[#E8A838] transition">← Devbridge</Link>
           <div className="flex items-center gap-3">
             <p className="text-[#444] text-xs">{new Date(session.createdAt).toLocaleDateString()}</p>
-            <PrintButton />
+            <ShareBar path={reportPath} title={`${session.founderName}'s Startup Viability Report`} score={`${report.overallScore}/100`} />
           </div>
         </div>
         <div className="hidden print:flex items-center justify-between mb-6">
@@ -74,18 +82,22 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           <p className="text-[#888] text-xs">{new Date(session.createdAt).toLocaleDateString()}</p>
         </div>
 
+        {expiringSoon && (
+          <div className="bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3 mb-5 print:hidden">
+            <p className="text-amber-400 text-xs">This report expires in {daysLeft} day{daysLeft !== 1 ? "s" : ""} · <a href="/" className="underline">Get a new evaluation</a></p>
+          </div>
+        )}
+
         <p className="text-[#E8A838] text-xs uppercase tracking-widest mb-2">Startup Viability Report</p>
         <h1 className="font-crimson text-3xl text-white mb-1">{session.founderName}</h1>
         {session.country && <p className="text-[#555] text-sm mb-6">{session.country}</p>}
 
-        {/* Pathway */}
         <div className={`border rounded-xl p-5 mb-5 ${pathwayColor}`}>
           <p className="text-xs uppercase tracking-widest mb-1 opacity-70">{report.pathway}</p>
           <p className="text-2xl font-crimson font-semibold">{report.pathwayLabel}</p>
           <p className="text-sm mt-2 opacity-90">{report.verdict}</p>
         </div>
 
-        {/* Scores */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {[
             { label: "Overall", score: report.overallScore },
@@ -100,7 +112,6 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           ))}
         </div>
 
-        {/* Mental health flag */}
         {report.mentalHealthFlag && report.mentalHealthNote && (
           <div className="bg-orange-900/20 border border-orange-800/40 rounded-xl p-4 mb-5">
             <p className="text-orange-400 text-xs uppercase tracking-wide mb-2">Founder Wellbeing Note</p>
@@ -108,7 +119,6 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           </div>
         )}
 
-        {/* Strengths */}
         {(report.strengths?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Strengths</h2>
@@ -123,7 +133,6 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           </div>
         )}
 
-        {/* Critical gaps */}
         {(report.criticalGaps?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Critical Gaps</h2>
@@ -144,7 +153,6 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           </div>
         )}
 
-        {/* Geography */}
         {report.geographyInsights && (
           <div className="bg-[#111] border border-[#222] rounded-xl p-4 mb-5">
             <h2 className="text-white text-sm font-semibold mb-2">{report.geographyInsights.location} — Local Context</h2>
@@ -160,7 +168,6 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           </div>
         )}
 
-        {/* Next steps */}
         {(report.immediateNextSteps?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Next Steps</h2>
@@ -178,7 +185,6 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           </div>
         )}
 
-        {/* Final message */}
         <div className="bg-[#E8A838]/10 border border-[#E8A838]/30 rounded-xl p-5 mb-8">
           <p className="text-xs text-[#E8A838] uppercase tracking-wide mb-2">From Devbridge</p>
           <p className="text-[#ccc] text-sm leading-relaxed">{report.finalMessage}</p>
@@ -200,6 +206,8 @@ export default async function AdvisorReportPage({ params }: { params: { id: stri
           Generated by Devbridge · devbridgekerala.com · AI-generated advisory only
         </p>
       </div>
+      <BackToTop />
+      <StickyShareBar path={reportPath} title={`${session.founderName}'s Startup Viability Report`} />
     </main>
   );
 }

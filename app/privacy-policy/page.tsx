@@ -93,8 +93,8 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-white text-lg font-semibold mb-3">8. Your Rights</h2>
             <p>
-              You have the right to request deletion of your session data at any time. Contact us at
-              the email below with your session ID. We will delete your data within 7 business days.
+              You have the right to request deletion of your session data at any time. Contact us via
+              our <Link href="/contact" className="text-[#E8A838] hover:underline">support page</Link> with your session ID. We will delete your data within 7 business days.
               Note: once deleted, your report cannot be recovered.
             </p>
           </section>
@@ -110,8 +110,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-white text-lg font-semibold mb-3">10. Contact</h2>
             <p>
-              For privacy-related requests or questions, contact us at{" "}
-              <span className="text-[#E8A838]">support@devbridge.in</span>. We respond within 5 business days.
+              For privacy-related requests or questions, <Link href="/contact" className="text-[#E8A838] hover:underline">contact us here</Link>. We respond within 5 business days.
             </p>
           </section>
         </div>

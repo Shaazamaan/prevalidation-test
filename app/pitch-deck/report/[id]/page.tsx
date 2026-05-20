@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { getPitchDeckSession } from "@/lib/db";
 import Link from "next/link";
-import PrintButton from "@/components/PrintButton";
+import ShareBar, { StickyShareBar } from "@/components/ShareBar";
+import BackToTop from "@/components/BackToTop";
 
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const s = await getPitchDeckSession(params.id);
@@ -61,6 +62,13 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
   const invStyle = VERDICT_STYLE[report.overallVerdict] ?? "";
   const grStyle = VERDICT_STYLE[report.grantVerdict ?? ""] ?? "";
 
+  const EXPIRY_MS = 90 * 24 * 60 * 60 * 1000;
+  const expiresAt = session.createdAt + EXPIRY_MS;
+  const daysLeft = Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
+  const expiringSoon = daysLeft <= 14;
+
+  const reportPath = `/pitch-deck/report/${session.id}`;
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] py-10 px-4 print:bg-white print:py-6">
       <style>{`
@@ -75,18 +83,24 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           .text-\\[\\#444\\] { color: #666 !important; }
         }
       `}</style>
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto pb-16 sm:pb-0">
         <div className="flex items-center justify-between mb-6 print:hidden">
           <Link href="/" className="text-[#555] text-sm hover:text-[#E8A838] transition">← Devbridge</Link>
           <div className="flex items-center gap-3">
             <p className="text-[#444] text-xs">{new Date(session.createdAt).toLocaleDateString()}</p>
-            <PrintButton />
+            <ShareBar path={reportPath} title={`${session.founderName ?? "Founder"}'s Pitch Deck Analysis`} score={`DB ${report.dbScore}/GR ${report.grScore}`} />
           </div>
         </div>
         <div className="hidden print:flex items-center justify-between mb-6">
           <p className="text-[#888] text-xs font-medium">devbridgekerala.com</p>
           <p className="text-[#888] text-xs">{new Date(session.createdAt).toLocaleDateString()}</p>
         </div>
+
+        {expiringSoon && (
+          <div className="bg-amber-900/20 border border-amber-800/40 rounded-xl px-4 py-3 mb-5 print:hidden">
+            <p className="text-amber-400 text-xs">This report expires in {daysLeft} day{daysLeft !== 1 ? "s" : ""} · <a href="/" className="underline">Get a new evaluation</a></p>
+          </div>
+        )}
 
         <p className="text-[#E8A838] text-xs uppercase tracking-widest mb-2">Pitch Deck Analysis</p>
         {session.founderName && <h1 className="font-crimson text-3xl text-white mb-1">{session.founderName}</h1>}
@@ -95,7 +109,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           <p className="text-[#666] text-sm mb-6">Track: {report.trackLabel}</p>
         )}
 
-        {/* Scores */}
         <div className="grid grid-cols-2 gap-3 mb-5">
           <div className={`border rounded-xl p-4 ${invStyle}`}>
             <p className="text-xs uppercase mb-1 opacity-70">DB Score</p>
@@ -111,7 +124,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         </div>
 
-        {/* Summary */}
         {report.executiveSummary && (
           <div className="bg-[#111] border border-[#222] rounded-xl p-4 mb-5">
             <p className="text-xs text-[#555] uppercase mb-2">Executive Summary</p>
@@ -119,7 +131,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         )}
 
-        {/* Investment dimensions */}
         {(report.investmentDimensions?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Investment Dimensions</h2>
@@ -136,7 +147,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         )}
 
-        {/* Grant dimensions */}
         {(report.grantDimensions?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Grant Dimensions</h2>
@@ -153,7 +163,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         )}
 
-        {/* Strengths */}
         {(report.topStrengths?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Top Strengths</h2>
@@ -166,7 +175,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         )}
 
-        {/* Critical weaknesses */}
         {(report.criticalWeaknesses?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Critical Weaknesses</h2>
@@ -180,7 +188,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         )}
 
-        {/* Investor readiness */}
         {report.investorReadiness && (
           <div className="bg-[#111] border border-[#222] rounded-xl p-4 mb-5">
             <h2 className="text-white font-semibold mb-3">Investor Readiness</h2>
@@ -202,7 +209,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         )}
 
-        {/* Grant types */}
         {(report.suggestedGrantTypes?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Suggested Grant Types</h2>
@@ -216,7 +222,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         )}
 
-        {/* Next steps */}
         {(report.nextSteps?.length ?? 0) > 0 && (
           <div className="mb-5">
             <h2 className="text-white font-semibold mb-3">Next Steps</h2>
@@ -235,7 +240,6 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           </div>
         )}
 
-        {/* Final message */}
         {report.finalMessage && (
           <div className="bg-[#E8A838]/10 border border-[#E8A838]/30 rounded-xl p-5 mb-6">
             <p className="text-xs text-[#E8A838] uppercase tracking-wide mb-2">From Devbridge</p>
@@ -259,6 +263,8 @@ export default async function PitchDeckReportPage({ params }: { params: { id: st
           Generated by Devbridge · devbridgekerala.com · AI-generated advisory only
         </p>
       </div>
+      <BackToTop />
+      <StickyShareBar path={reportPath} title={`${session.founderName ?? "Founder"}'s Pitch Deck Analysis`} />
     </main>
   );
 }

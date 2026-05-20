@@ -18,7 +18,8 @@ const KEY_SECRET =
 export const RAZORPAY_KEY_ID = KEY_ID;
 export const PAYMENT_MODE = mode;
 
-export async function createRazorpayOrder(receipt: string): Promise<{ id: string; amount: number }> {
+export async function createRazorpayOrder(receipt: string, amount?: number): Promise<{ id: string; amount: number }> {
+  const orderAmount = amount ?? AMOUNT;
   const res = await fetch("https://api.razorpay.com/v1/orders", {
     method: "POST",
     signal: AbortSignal.timeout(10000),
@@ -26,7 +27,7 @@ export async function createRazorpayOrder(receipt: string): Promise<{ id: string
       Authorization: `Basic ${Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString("base64")}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ amount: AMOUNT, currency: "INR", receipt }),
+    body: JSON.stringify({ amount: orderAmount, currency: "INR", receipt }),
   });
   if (!res.ok) {
     const err = await res.json();

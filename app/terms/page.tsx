@@ -128,8 +128,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-white text-lg font-semibold mb-3">11. Contact</h2>
             <p>
-              For questions about these terms, contact{" "}
-              <span className="text-[#E8A838]">support@devbridge.in</span>.
+              For questions about these terms, <Link href="/contact" className="text-[#E8A838] hover:underline">contact us here</Link>.
             </p>
           </section>
         </div>

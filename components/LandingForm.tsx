@@ -204,7 +204,6 @@ export default function LandingForm() {
           </div>
           <div className="flex gap-2 mt-2">
             <span className="text-xs px-2 py-0.5 bg-[#111] border border-[#222] rounded text-[#555]">Readiness interrogation</span>
-            <span className="text-xs px-2 py-0.5 bg-[#111] border border-[#222] rounded text-[#555]">₹999</span>
           </div>
         </button>
 
@@ -222,7 +221,6 @@ export default function LandingForm() {
           </div>
           <div className="flex gap-2 mt-2">
             <span className="text-xs px-2 py-0.5 bg-[#111] border border-[#222] rounded text-[#555]">Geography-aware</span>
-            <span className="text-xs px-2 py-0.5 bg-[#111] border border-[#222] rounded text-[#555]">₹999</span>
           </div>
         </button>
 
@@ -240,7 +238,6 @@ export default function LandingForm() {
           </div>
           <div className="flex gap-2 mt-2">
             <span className="text-xs px-2 py-0.5 bg-[#111] border border-[#222] rounded text-[#555]">Investment + Grant</span>
-            <span className="text-xs px-2 py-0.5 bg-[#111] border border-[#222] rounded text-[#555]">₹999</span>
           </div>
         </button>
 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 import { buildAdvisorPrompt, type AdvisorIntake } from "@/lib/advisor-prompt";
 import { verifyPaymentSignature } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { saveAdvisorSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit } from "@/lib/db";
+import { saveAdvisorSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -109,6 +110,16 @@ async function getAIResponse(prompt: string): Promise<string | null> {
   return raceFirst([() => callGroq(prompt), () => callGemini(prompt)]);
 }
 
+function verifyCouponToken(code: string, token: string): boolean {
+  const secret = process.env.NEXTAUTH_SECRET ?? "";
+  const now = Math.floor(Date.now() / 1000 / 600);
+  for (const w of [now, now - 1]) {
+    const expected = crypto.createHmac("sha256", secret).update(`${code}:${w}`).digest("hex");
+    if (expected === token) return true;
+  }
+  return false;
+}
+
 interface AdvisorReport {
   pathway: string;
   pathwayLabel: string;
@@ -142,11 +153,21 @@ export async function POST(req: NextRequest) {
 
     const { intake, payment, founderEmail, founderPhone, founderCountry } = body;
 
+    const isFreeOrder = payment?.orderId?.startsWith("FREE_");
+    const couponCode = isFreeOrder ? payment!.orderId.replace("FREE_", "") : undefined;
+
     if (!intake?.founderName || !intake?.problemStatement) {
       return NextResponse.json({ error: "Missing required intake fields" }, { status: 400 });
     }
 
     const adminRequest = isAdminRequest(req);
+
+    const paused = await isSitePaused();
+    if (paused && !adminRequest) {
+      return NextResponse.json({
+        error: "🚧 Our ATM machine is empty — we're refilling it! The army is on the way. Please try again in a little while. We apologize for the inconvenience! 💛"
+      }, { status: 503 });
+    }
 
     if (!adminRequest) {
       const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "unknown";
@@ -160,12 +181,18 @@ export async function POST(req: NextRequest) {
       if (!payment?.orderId || !payment?.paymentId || !payment?.signature) {
         return NextResponse.json({ error: "Payment required" }, { status: 402 });
       }
-      const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature);
-      if (!valid) {
-        return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
-      }
-      if (await isPaymentUsed(payment.orderId)) {
-        return NextResponse.json({ error: "Payment already used" }, { status: 402 });
+      if (isFreeOrder && couponCode) {
+        const tokenValid = verifyCouponToken(couponCode, payment.signature);
+        if (!tokenValid) return NextResponse.json({ error: "Invalid coupon token" }, { status: 402 });
+        if (await isCouponUsed(couponCode)) return NextResponse.json({ error: "Coupon already used" }, { status: 402 });
+      } else {
+        const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature);
+        if (!valid) {
+          return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
+        }
+        if (await isPaymentUsed(payment.orderId)) {
+          return NextResponse.json({ error: "Payment already used" }, { status: 402 });
+        }
       }
     }
 
@@ -192,7 +219,13 @@ export async function POST(req: NextRequest) {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "unknown";
     const ipHash = await hashIP(ip);
 
-    if (payment) await markPaymentUsed(payment.orderId);
+    if (isFreeOrder && couponCode) {
+      await markCouponUsed(couponCode);
+      if (founderEmail) await markEmailCouponUsed(couponCode, founderEmail);
+      await incrementCouponUsage(couponCode, founderEmail ?? "unknown");
+    } else if (payment && !isFreeOrder) {
+      await markPaymentUsed(payment.orderId);
+    }
 
     await saveAdvisorSession({
       id: sessionId,

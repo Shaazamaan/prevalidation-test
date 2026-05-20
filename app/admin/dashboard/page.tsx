@@ -1,15 +1,16 @@
 import { redirect } from "next/navigation";
-import { getAllSessions, getReport, getAllAdvisorSessions, getAllPitchDeckSessions } from "@/lib/db";
+import { getAllSessions, getReport, getAllAdvisorSessions, getAllPitchDeckSessions, getPWAInstallCount } from "@/lib/db";
 import { isAdminServer } from "@/lib/admin-auth";
 import AdminDashboardClient from "@/components/AdminDashboardClient";
 
 export default async function DashboardPage() {
   if (!isAdminServer()) redirect("/admin");
 
-  const [readinessSessions, advisorSessions, pitchDeckSessions] = await Promise.all([
+  const [readinessSessions, advisorSessions, pitchDeckSessions, pwaInstalls] = await Promise.all([
     getAllSessions(),
     getAllAdvisorSessions(),
     getAllPitchDeckSessions(),
+    getPWAInstallCount().catch(() => 0),
   ]);
 
   const reports = await Promise.all(
@@ -47,6 +48,22 @@ export default async function DashboardPage() {
     pitchDeckCount: pitchDeckSessions.length,
   };
 
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+  });
+
+  const dayCounts = Array.from({ length: 7 }, (_, i) => {
+    const start = Date.now() - (6 - i) * 86400000;
+    const end = start + 86400000;
+    return [
+      ...readinessSessions.filter((s) => s.createdAt >= start && s.createdAt < end),
+      ...advisorSessions.filter((s) => s.createdAt >= start && s.createdAt < end),
+      ...pitchDeckSessions.filter((s) => s.createdAt >= start && s.createdAt < end),
+    ].length;
+  });
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
@@ -78,6 +95,14 @@ export default async function DashboardPage() {
             <div className="text-xs text-[#555] mt-1">This Week</div>
           </div>
         </div>
+
+        {/* PWA stat */}
+        {pwaInstalls > 0 && (
+          <div className="bg-[#111] border border-purple-800/30 rounded-xl p-4 text-center mb-6">
+            <div className="text-2xl font-bold text-purple-400">📱 {pwaInstalls}</div>
+            <div className="text-xs text-[#555] mt-1">PWA Installs</div>
+          </div>
+        )}
 
         {/* Tool popularity */}
         <div className="grid grid-cols-3 gap-3 mb-8">
@@ -117,6 +142,8 @@ export default async function DashboardPage() {
           readinessSessions={enrichedReadiness}
           advisorSessions={advisorSessions}
           pitchDeckSessions={pitchDeckSessions}
+          days={days}
+          dayCounts={dayCounts}
         />
       </div>
     </main>

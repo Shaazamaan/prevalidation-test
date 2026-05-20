@@ -1,0 +1,20 @@
+{
+  "name": "Devbridge — Startup Evaluation",
+  "short_name": "Devbridge",
+  "description": "AI-powered startup readiness tools for founders.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#E8A838",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "en"
+}

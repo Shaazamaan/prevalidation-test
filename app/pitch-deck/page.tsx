@@ -6,6 +6,7 @@ import { Suspense } from "react";
 export const metadata: Metadata = {
   title: "Pitch Deck Validator — Devbridge",
   description: "Upload your pitch deck and get a comprehensive AI evaluation. DB Score (investment readiness), GR Score (grant readiness), 23 dimensions across 15 startup tracks.",
+  keywords: ["pitch deck validator", "pitch deck analysis", "DB Score", "GR Score", "startup pitch India", "pitch deck AI review", "grant readiness"],
 };
 
 export default function PitchDeckPage() {
@@ -75,6 +76,7 @@ export default function PitchDeckPage() {
             <Link href="/privacy-policy" className="hover:text-[#555] transition">Privacy</Link>
             <Link href="/terms" className="hover:text-[#555] transition">Terms</Link>
             <Link href="/refund-policy" className="hover:text-[#555] transition">Refunds</Link>
+            <Link href="/contact" className="hover:text-[#555] transition">Contact</Link>
           </div>
         </footer>
       </div>

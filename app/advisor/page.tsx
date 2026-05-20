@@ -6,6 +6,7 @@ import { Suspense } from "react";
 export const metadata: Metadata = {
   title: "Startup Viability Advisor — Devbridge",
   description: "Get a personalized startup viability assessment across 7 dimensions. AI-powered advisor with geography-specific insights, mental health screening, and 6 routing pathways.",
+  keywords: ["startup viability advisor", "startup evaluation India", "founder readiness check", "startup pathway", "AI startup advisor"],
 };
 
 export default function AdvisorPage() {
@@ -76,6 +77,7 @@ export default function AdvisorPage() {
             <Link href="/privacy-policy" className="hover:text-[#555] transition">Privacy</Link>
             <Link href="/terms" className="hover:text-[#555] transition">Terms</Link>
             <Link href="/refund-policy" className="hover:text-[#555] transition">Refunds</Link>
+            <Link href="/contact" className="hover:text-[#555] transition">Contact</Link>
           </div>
         </footer>
       </div>

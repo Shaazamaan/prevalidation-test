@@ -6,8 +6,9 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin", "/admin/", "/api/"],
+        disallow: ["/admin", "/advisor/report/", "/pitch-deck/report/", "/chat/"],
       },
     ],
+    sitemap: "https://devbridgekerala.com/sitemap.xml",
   };
 }

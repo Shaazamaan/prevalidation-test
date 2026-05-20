@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { QUESTIONS } from "@/lib/questions";
 import PaymentModal, { type PaymentResult } from "@/components/PaymentModal";
+import ProgressMessages from "@/components/ProgressMessages";
 
 type Props = {
   sessionId: string;
@@ -51,6 +52,7 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
   const [showPayment, setShowPayment] = useState(false);
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
+  const [resumeDismissed, setResumeDismissed] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -198,18 +200,13 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
     }
   };
 
+  const answeredCount = answers.filter((a) => (a ?? "").trim().length >= MIN_CHARS).length;
+  const showResumeBanner = mounted && !resumeDismissed && answeredCount >= 10 && current === 0;
+
   if (submitting) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
-        <div className="text-center max-w-sm">
-          <div className="w-12 h-12 border-2 border-[#E8A838] border-t-transparent rounded-full animate-spin mx-auto mb-6" />
-          <p className="font-crimson text-2xl text-white mb-2">Evaluating your answers…</p>
-          <p className="text-[#666] text-sm mb-6">This takes 20–40 seconds. Please don't close this tab.</p>
-          <div className="bg-[#111] border border-[#222] rounded-xl p-4">
-            <p className="text-xs text-[#555] uppercase mb-1">Evaluating</p>
-            <p className="text-[#888] text-sm">{founderName}'s startup readiness across 14 dimensions</p>
-          </div>
-        </div>
+        <ProgressMessages tool="readiness" />
       </div>
     );
   }
@@ -289,6 +286,34 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
           style={{ width: `${progress}%` }}
         />
       </div>
+
+      {showResumeBanner && (
+        <div className="shrink-0 bg-amber-900/20 border-b border-amber-800/40 px-4 py-3">
+          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-amber-400 text-xs">
+              You have {answeredCount}/{TOTAL} questions answered. Continue where you left off?
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const firstUnanswered = answers.findIndex((a, i) => (a ?? "").trim().length < MIN_CHARS && !flags[i]);
+                  setCurrent(firstUnanswered >= 0 ? firstUnanswered : 0);
+                  setResumeDismissed(true);
+                }}
+                className="text-xs px-3 py-1 bg-amber-500 text-black rounded-lg font-medium hover:bg-amber-400 transition"
+              >
+                Resume →
+              </button>
+              <button
+                onClick={() => setResumeDismissed(true)}
+                className="text-xs text-amber-600 hover:text-amber-400 transition"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Startup idea strip */}
       <div className="shrink-0 bg-[#0f0f0f] border-b border-[#1a1a1a] px-4 py-2">
@@ -430,8 +455,8 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
           )}
 
           {!isLast && (
-            <p className="text-center text-xs text-[#333]">
-              Ctrl/Cmd + Enter to advance
+            <p className="hidden sm:block text-center text-xs text-[#333]">
+              Ctrl+Enter to continue
             </p>
           )}
 
