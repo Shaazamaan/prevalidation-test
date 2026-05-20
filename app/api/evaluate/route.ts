@@ -8,10 +8,13 @@ export const maxDuration = 60;
 
 type AIResult = { content: string | null; error?: string };
 
+const TIMEOUT = 12000;
+
 async function callGroq(prompt: string): Promise<AIResult> {
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(TIMEOUT),
       headers: {
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         "Content-Type": "application/json",
@@ -25,10 +28,10 @@ async function callGroq(prompt: string): Promise<AIResult> {
       }),
     });
     const data = await res.json();
-    if (!res.ok) return { content: null, error: data?.error?.message ?? `HTTP ${res.status}` };
+    if (!res.ok) return { content: null, error: `Groq ${res.status}: ${data?.error?.message}` };
     return { content: data.choices?.[0]?.message?.content ?? null };
   } catch (e) {
-    return { content: null, error: String(e) };
+    return { content: null, error: `Groq exception: ${String(e)}` };
   }
 }
 
@@ -36,12 +39,13 @@ async function callNvidia(prompt: string): Promise<AIResult> {
   try {
     const res = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(TIMEOUT),
       headers: {
         Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
+        model: "meta/llama-3.1-8b-instruct",
         messages: [{ role: "user", content: prompt }],
         stream: false,
         max_tokens: 1200,
@@ -49,19 +53,20 @@ async function callNvidia(prompt: string): Promise<AIResult> {
       }),
     });
     const data = await res.json();
-    if (!res.ok) return { content: null, error: data?.error?.message ?? `HTTP ${res.status}` };
+    if (!res.ok) return { content: null, error: `Nvidia ${res.status}: ${data?.error?.message}` };
     return { content: data.choices?.[0]?.message?.content ?? null };
   } catch (e) {
-    return { content: null, error: String(e) };
+    return { content: null, error: `Nvidia exception: ${String(e)}` };
   }
 }
 
 async function callGemini(prompt: string): Promise<AIResult> {
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
       {
         method: "POST",
+        signal: AbortSignal.timeout(TIMEOUT),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -70,10 +75,10 @@ async function callGemini(prompt: string): Promise<AIResult> {
       }
     );
     const data = await res.json();
-    if (!res.ok) return { content: null, error: data?.error?.message ?? `HTTP ${res.status}` };
+    if (!res.ok) return { content: null, error: `Gemini ${res.status}: ${data?.error?.message}` };
     return { content: data.candidates?.[0]?.content?.parts?.[0]?.text ?? null };
   } catch (e) {
-    return { content: null, error: String(e) };
+    return { content: null, error: `Gemini exception: ${String(e)}` };
   }
 }
 
@@ -81,6 +86,7 @@ async function callOpenRouter(prompt: string): Promise<AIResult> {
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(TIMEOUT),
       headers: {
         Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
@@ -96,10 +102,10 @@ async function callOpenRouter(prompt: string): Promise<AIResult> {
       }),
     });
     const data = await res.json();
-    if (!res.ok) return { content: null, error: data?.error?.message ?? `HTTP ${res.status}` };
+    if (!res.ok) return { content: null, error: `OpenRouter ${res.status}: ${data?.error?.message}` };
     return { content: data.choices?.[0]?.message?.content ?? null };
   } catch (e) {
-    return { content: null, error: String(e) };
+    return { content: null, error: `OpenRouter exception: ${String(e)}` };
   }
 }
 
@@ -108,7 +114,7 @@ async function getAIResponse(prompt: string): Promise<string | null> {
   for (const provider of providers) {
     const result = await provider(prompt);
     if (result.content) return result.content;
-    console.log(`[Evaluate] Provider failed (${result.error}), trying next...`);
+    console.error(`[Evaluate] ${result.error}`);
   }
   return null;
 }
@@ -144,13 +150,19 @@ export async function POST(req: NextRequest) {
     const content = await getAIResponse(prompt);
 
     if (!content) {
-      return NextResponse.json({ error: "All AI providers unavailable. Please try again in 30 seconds." }, { status: 503 });
+      return NextResponse.json(
+        { error: "All AI providers unavailable. Please try again in 30 seconds." },
+        { status: 503 }
+      );
     }
 
     const report = extractReport(content);
     if (!report) {
-      console.error("[Evaluate] Could not parse REPORT from AI response:", content.slice(0, 500));
-      return NextResponse.json({ error: "Failed to parse evaluation. Please try again." }, { status: 500 });
+      console.error("[Evaluate] Could not parse REPORT. Raw:", content.slice(0, 600));
+      return NextResponse.json(
+        { error: "Failed to parse evaluation. Please try again." },
+        { status: 500 }
+      );
     }
 
     const messages = answers.flatMap((a, i) => [
