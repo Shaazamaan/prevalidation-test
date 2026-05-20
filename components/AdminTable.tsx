@@ -137,8 +137,15 @@ export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }
                     <span className={`inline-block border text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${VERDICT_BADGE[s.report.verdict] ?? ""}`}>
                       {s.report.verdict}
                     </span>
+                  ) : s.status === "active" ? (
+                    <div>
+                      <span className="text-[#555] text-xs">In progress</span>
+                      {s.lastActivePhase != null && (
+                        <p className="text-[#E8A838] text-xs mt-0.5">Phase {s.lastActivePhase}/14</p>
+                      )}
+                    </div>
                   ) : (
-                    <span className="text-[#555] text-xs">{s.status === "active" ? "In progress" : "No report"}</span>
+                    <span className="text-[#555] text-xs">No report</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-[#666] text-xs hidden md:table-cell">

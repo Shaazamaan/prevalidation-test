@@ -1,4 +1,5 @@
 import FounderForm from "@/components/FounderForm";
+import SampleReportModal from "@/components/SampleReportModal";
 import { getSessionCount } from "@/lib/db";
 
 export const revalidate = 300;
@@ -17,17 +18,18 @@ export default async function HomePage() {
           <h1 className="font-crimson text-4xl sm:text-5xl font-semibold text-white leading-tight mb-3">
             Are You Ready to Validate?
           </h1>
-          <p className="text-[#888] text-base sm:text-lg mb-4">
+          <p className="text-[#888] text-base sm:text-lg mb-3">
             Find out before you waste a single day.
           </p>
           {sessionCount !== null && sessionCount > 0 && (
-            <p className="text-[#555] text-sm">
+            <p className="text-[#555] text-sm mb-2">
               {sessionCount.toLocaleString()} founder{sessionCount !== 1 ? "s" : ""} have completed this check.
             </p>
           )}
+          <SampleReportModal />
         </div>
 
-        {/* What this is */}
+        {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-8 text-center">
           {[
             { label: "Questions", value: "70" },
