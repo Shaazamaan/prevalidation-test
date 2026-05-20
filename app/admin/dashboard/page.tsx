@@ -1,17 +1,62 @@
 import { redirect } from "next/navigation";
-import { getAllSessions, getReport, getAllAdvisorSessions, getAllPitchDeckSessions, getPWAInstallCount } from "@/lib/db";
+import {
+  getAllSessions,
+  getReport,
+  getAllAdvisorSessions,
+  getAllPitchDeckSessions,
+  getPWAInstallCount,
+  getAllCouponStats,
+  getRazorpayMode,
+} from "@/lib/db";
 import { isAdminServer } from "@/lib/admin-auth";
 import AdminDashboardClient from "@/components/AdminDashboardClient";
+import type { Session, AdvisorSession, PitchDeckSession, Report } from "@/lib/db";
+
+export type RepeatUser = {
+  email: string;
+  name: string;
+  phone?: string;
+  tools: string[];
+  totalSpend: number; // paise
+  sessionCount: number;
+};
+
+export type CountryStat = { country: string; count: number };
+export type CouponStat = { code: string; count: number; emails: string[] };
+
+export type DashboardAnalytics = {
+  totalSessions: number;
+  completedSessions: number;
+  paidCount: number;
+  freeCount: number;
+  adminCount: number;
+  totalRevenuePaise: number;
+  revenueByTool: { readiness: number; advisor: number; pitchdeck: number };
+  thisWeekTotal: number;
+  thisMonthRevenuePaise: number;
+  readinessCreated: number;
+  readinessCompleted: number;
+  advisorCount: number;
+  pitchDeckCount: number;
+  pwaInstalls: number;
+  countries: CountryStat[];
+  repeatUsers: RepeatUser[];
+  couponStats: CouponStat[];
+  razorpayMode: "test" | "live";
+};
 
 export default async function DashboardPage() {
   if (!isAdminServer()) redirect("/admin");
 
-  const [readinessSessions, advisorSessions, pitchDeckSessions, pwaInstalls] = await Promise.all([
-    getAllSessions(),
-    getAllAdvisorSessions(),
-    getAllPitchDeckSessions(),
-    getPWAInstallCount().catch(() => 0),
-  ]);
+  const [readinessSessions, advisorSessions, pitchDeckSessions, pwaInstalls, couponStats, razorpayMode] =
+    await Promise.all([
+      getAllSessions(),
+      getAllAdvisorSessions(),
+      getAllPitchDeckSessions(),
+      getPWAInstallCount().catch(() => 0),
+      getAllCouponStats().catch(() => [] as { code: string; count: number; emails: string[] }[]),
+      getRazorpayMode(),
+    ]);
 
   const reports = await Promise.all(
     readinessSessions.map((s) => getReport(s.id).catch(() => null))
@@ -22,32 +67,96 @@ export default async function DashboardPage() {
     report: reports[i] ?? null,
   }));
 
-  // Analytics
-  const totalSessions = readinessSessions.length + advisorSessions.length + pitchDeckSessions.length;
-  const completedReadiness = readinessSessions.filter((s) => s.status === "completed").length;
-  const paidCount = completedReadiness + advisorSessions.length + pitchDeckSessions.length;
-  const revenue = paidCount * 999;
-  const conversionRate = totalSessions > 0
-    ? Math.round((paidCount / totalSessions) * 100)
-    : 0;
+  // ── Revenue calculation ─────────────────────────────────────────────────────
+  function sessionRevenue(s: { payment?: { amount?: number; isFree?: boolean; isAdmin?: boolean } }) {
+    if (!s.payment) return 0;
+    return s.payment.amount ?? 0;
+  }
 
-  const thisWeek = (Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const readinessRevenue = readinessSessions
+    .filter((s) => s.status === "completed")
+    .reduce((sum, s) => sum + sessionRevenue(s), 0);
+  const advisorRevenue = advisorSessions.reduce((sum, s) => sum + sessionRevenue(s), 0);
+  const pitchDeckRevenue = pitchDeckSessions.reduce((sum, s) => sum + sessionRevenue(s), 0);
+  const totalRevenuePaise = readinessRevenue + advisorRevenue + pitchDeckRevenue;
+
+  const nowMs = Date.now();
+  const thisWeekMs = nowMs - 7 * 24 * 60 * 60 * 1000;
+  const thisMonthMs = nowMs - 30 * 24 * 60 * 60 * 1000;
+
   const thisWeekTotal =
-    readinessSessions.filter((s) => s.createdAt > thisWeek).length +
-    advisorSessions.filter((s) => s.createdAt > thisWeek).length +
-    pitchDeckSessions.filter((s) => s.createdAt > thisWeek).length;
+    readinessSessions.filter((s) => s.createdAt > thisWeekMs).length +
+    advisorSessions.filter((s) => s.createdAt > thisWeekMs).length +
+    pitchDeckSessions.filter((s) => s.createdAt > thisWeekMs).length;
 
-  const analytics = {
-    totalSessions,
-    paidCount,
-    revenue,
-    conversionRate,
-    thisWeekTotal,
-    readinessCount: readinessSessions.length,
-    advisorCount: advisorSessions.length,
-    pitchDeckCount: pitchDeckSessions.length,
+  const thisMonthRevenuePaise =
+    readinessSessions.filter((s) => s.status === "completed" && s.createdAt > thisMonthMs)
+      .reduce((sum, s) => sum + sessionRevenue(s), 0) +
+    advisorSessions.filter((s) => s.createdAt > thisMonthMs)
+      .reduce((sum, s) => sum + sessionRevenue(s), 0) +
+    pitchDeckSessions.filter((s) => s.createdAt > thisMonthMs)
+      .reduce((sum, s) => sum + sessionRevenue(s), 0);
+
+  // ── Payment type breakdown ──────────────────────────────────────────────────
+  const allCompleted = [
+    ...readinessSessions.filter((s) => s.status === "completed"),
+    ...advisorSessions,
+    ...pitchDeckSessions,
+  ];
+  const paidCount = allCompleted.filter((s) => s.payment && !s.payment.isFree && !s.payment.isAdmin).length;
+  const freeCount = allCompleted.filter((s) => s.payment?.isFree).length;
+  const adminCount = allCompleted.filter((s) => s.payment?.isAdmin || !s.payment).length;
+
+  // ── Country breakdown ────────────────────────────────────────────────────────
+  const countryCounts: Record<string, number> = {};
+  for (const s of [...readinessSessions, ...advisorSessions, ...pitchDeckSessions]) {
+    const c = s.country ?? "Unknown";
+    countryCounts[c] = (countryCounts[c] ?? 0) + 1;
+  }
+  const countries: CountryStat[] = Object.entries(countryCounts)
+    .map(([country, count]) => ({ country, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+
+  // ── Repeat users (same email across tools) ──────────────────────────────────
+  type UserEntry = { email: string; name: string; phone?: string; tool: string; amount: number };
+  const emailMap: Record<string, UserEntry[]> = {};
+
+  const addToMap = (
+    sessions: (Session | AdvisorSession | PitchDeckSession)[],
+    toolLabel: string
+  ) => {
+    for (const s of sessions) {
+      if (!s.email) continue;
+      const key = s.email.toLowerCase();
+      if (!emailMap[key]) emailMap[key] = [];
+      emailMap[key].push({
+        email: s.email,
+        name: s.founderName ?? "",
+        phone: s.phone,
+        tool: toolLabel,
+        amount: s.payment?.amount ?? 0,
+      });
+    }
   };
 
+  addToMap(readinessSessions.filter((s) => s.status === "completed"), "Readiness");
+  addToMap(advisorSessions, "Advisor");
+  addToMap(pitchDeckSessions, "Pitch Deck");
+
+  const repeatUsers: RepeatUser[] = Object.entries(emailMap)
+    .filter(([, entries]) => entries.length > 1)
+    .map(([email, entries]) => ({
+      email,
+      name: entries[0].name ?? email,
+      phone: entries[0].phone,
+      tools: [...new Set(entries.map((e) => e.tool))],
+      totalSpend: entries.reduce((s, e) => s + e.amount, 0),
+      sessionCount: entries.length,
+    }))
+    .sort((a, b) => b.totalSpend - a.totalSpend);
+
+  // ── Chart data (last 7 days) ─────────────────────────────────────────────────
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
@@ -55,7 +164,7 @@ export default async function DashboardPage() {
   });
 
   const dayCounts = Array.from({ length: 7 }, (_, i) => {
-    const start = Date.now() - (6 - i) * 86400000;
+    const start = nowMs - (6 - i) * 86400000;
     const end = start + 86400000;
     return [
       ...readinessSessions.filter((s) => s.createdAt >= start && s.createdAt < end),
@@ -64,11 +173,42 @@ export default async function DashboardPage() {
     ].length;
   });
 
+  const totalSessions = readinessSessions.length + advisorSessions.length + pitchDeckSessions.length;
+  const readinessCompleted = readinessSessions.filter((s) => s.status === "completed").length;
+
+  const analytics: DashboardAnalytics = {
+    totalSessions,
+    completedSessions: readinessCompleted + advisorSessions.length + pitchDeckSessions.length,
+    paidCount,
+    freeCount,
+    adminCount,
+    totalRevenuePaise,
+    revenueByTool: {
+      readiness: readinessRevenue,
+      advisor: advisorRevenue,
+      pitchdeck: pitchDeckRevenue,
+    },
+    thisWeekTotal,
+    thisMonthRevenuePaise,
+    readinessCreated: readinessSessions.length,
+    readinessCompleted,
+    advisorCount: advisorSessions.length,
+    pitchDeckCount: pitchDeckSessions.length,
+    pwaInstalls,
+    countries,
+    repeatUsers,
+    couponStats,
+    razorpayMode,
+  };
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
-          <h1 className="font-crimson text-2xl sm:text-3xl font-semibold text-white">Admin Dashboard</h1>
+          <div>
+            <h1 className="font-crimson text-2xl sm:text-3xl font-semibold text-white">Admin Dashboard</h1>
+            <p className="text-[#555] text-xs mt-1">Devbridge · All activity, A–Z</p>
+          </div>
           <form action="/api/admin/logout" method="POST">
             <button type="submit" className="text-sm text-[#666] hover:text-white transition">
               Sign out
@@ -76,72 +216,11 @@ export default async function DashboardPage() {
           </form>
         </div>
 
-        {/* Top stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-3 mb-6">
-          <div className="bg-[#111] border border-[#222] rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-white">{totalSessions}</div>
-            <div className="text-xs text-[#555] mt-1">Total Sessions</div>
-          </div>
-          <div className="bg-[#111] border border-[#E8A838]/30 rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-[#E8A838]">₹{revenue.toLocaleString("en-IN")}</div>
-            <div className="text-xs text-[#555] mt-1">Revenue</div>
-          </div>
-          <div className="bg-[#111] border border-[#222] rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-white">{conversionRate}%</div>
-            <div className="text-xs text-[#555] mt-1">Conversion Rate</div>
-          </div>
-          <div className="bg-[#111] border border-[#222] rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-white">{thisWeekTotal}</div>
-            <div className="text-xs text-[#555] mt-1">This Week</div>
-          </div>
-        </div>
-
-        {/* PWA stat */}
-        {pwaInstalls > 0 && (
-          <div className="bg-[#111] border border-purple-800/30 rounded-xl p-4 text-center mb-6">
-            <div className="text-2xl font-bold text-purple-400">📱 {pwaInstalls}</div>
-            <div className="text-xs text-[#555] mt-1">PWA Installs</div>
-          </div>
-        )}
-
-        {/* Tool popularity */}
-        <div className="grid grid-cols-3 gap-3 mb-8">
-          <div className="bg-[#111] border border-[#222] rounded-xl p-4 text-center">
-            <div className="text-xl font-bold text-white">{analytics.readinessCount}</div>
-            <div className="text-xs text-[#555] mt-1">Readiness Check</div>
-            <div className="mt-2 h-1 bg-[#1a1a1a] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[#E8A838] rounded-full"
-                style={{ width: totalSessions > 0 ? `${(analytics.readinessCount / totalSessions) * 100}%` : "0%" }}
-              />
-            </div>
-          </div>
-          <div className="bg-[#111] border border-[#222] rounded-xl p-4 text-center">
-            <div className="text-xl font-bold text-white">{analytics.advisorCount}</div>
-            <div className="text-xs text-[#555] mt-1">Advisor</div>
-            <div className="mt-2 h-1 bg-[#1a1a1a] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500 rounded-full"
-                style={{ width: totalSessions > 0 ? `${(analytics.advisorCount / totalSessions) * 100}%` : "0%" }}
-              />
-            </div>
-          </div>
-          <div className="bg-[#111] border border-[#222] rounded-xl p-4 text-center">
-            <div className="text-xl font-bold text-white">{analytics.pitchDeckCount}</div>
-            <div className="text-xs text-[#555] mt-1">Pitch Deck</div>
-            <div className="mt-2 h-1 bg-[#1a1a1a] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-green-500 rounded-full"
-                style={{ width: totalSessions > 0 ? `${(analytics.pitchDeckCount / totalSessions) * 100}%` : "0%" }}
-              />
-            </div>
-          </div>
-        </div>
-
         <AdminDashboardClient
           readinessSessions={enrichedReadiness}
           advisorSessions={advisorSessions}
           pitchDeckSessions={pitchDeckSessions}
+          analytics={analytics}
           days={days}
           dayCounts={dayCounts}
         />

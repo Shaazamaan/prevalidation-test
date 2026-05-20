@@ -25,6 +25,14 @@ export default function PitchDeckForm() {
   const [error, setError] = useState("");
   const [lastSessionId, setLastSessionId] = useState<string | null>(null);
   const [profile, setProfile] = useState<{ name?: string; email?: string; phone?: string; country?: string }>({});
+  const [toolPrice, setToolPrice] = useState("₹999");
+
+  useEffect(() => {
+    fetch("/api/payment/price?tool=pitchdeck")
+      .then((r) => r.json())
+      .then((d: { display?: string }) => { if (d.display) setToolPrice(d.display); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const p = loadProfile();
@@ -101,7 +109,7 @@ export default function PitchDeckForm() {
           founderName: profile.name,
           tool: "Pitch Deck Validator",
           reportUrl: window.location.origin + "/pitch-deck/report/" + data.sessionId,
-          amount: isFree ? 0 : 99900,
+          amount: payment.amount,
           date: new Date(),
         });
         router.push("/pitch-deck/report/" + data.sessionId);
@@ -138,6 +146,7 @@ export default function PitchDeckForm() {
           founderEmail={profile.email}
           founderPhone={profile.phone}
           receipt={`ptch-${Date.now().toString(36)}`}
+          tool="pitchdeck"
           onSuccess={handlePaymentSuccess}
           onCancel={() => setShowPayment(false)}
         />
@@ -201,7 +210,7 @@ export default function PitchDeckForm() {
         disabled={!file || !!fileError}
         className="w-full bg-[#E8A838] text-black font-semibold py-3 rounded-xl text-sm hover:bg-[#d4962e] transition disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Pay ₹999 & Analyze Deck →
+        Pay {toolPrice} & Analyze Deck →
       </button>
 
       <p className="text-center text-xs text-[#444]">

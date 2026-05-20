@@ -1,14 +1,15 @@
 import type { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
+  const base = (process.env.NEXTAUTH_URL ?? "https://devbridgekerala.com").replace(/\/$/, "");
   return {
     rules: [
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin", "/advisor/report/", "/pitch-deck/report/", "/chat/"],
+        disallow: ["/admin", "/api/", "/report/", "/advisor/report/", "/pitch-deck/report/", "/chat/"],
       },
     ],
-    sitemap: "https://devbridgekerala.com/sitemap.xml",
+    sitemap: `${base}/sitemap.xml`,
   };
 }

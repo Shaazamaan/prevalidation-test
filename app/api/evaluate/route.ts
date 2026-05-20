@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage } from "@/lib/db";
+import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, type PaymentRecord } from "@/lib/db";
 import { buildEvaluationPrompt } from "@/lib/evaluate-prompt";
-import { verifyPaymentSignature } from "@/lib/razorpay";
+import { verifyPaymentSignature, getRazorpayKeys } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
 import type { Report } from "@/lib/db";
 
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type AIResult = { content: string | null; error?: string };
-type PaymentData = { orderId: string; paymentId: string; signature: string };
+type PaymentData = { orderId: string; paymentId: string; signature: string; amount?: number; couponToken?: string };
 
 const TIMEOUT = 25000;
 
@@ -242,6 +242,9 @@ export async function POST(req: NextRequest) {
         error: "🚧 Our ATM machine is empty — we're refilling it! The army is on the way. Please try again in a little while. We apologize for the inconvenience! 💛"
       }, { status: 503 });
     }
+
+    const { keySecret, mode: rzpMode } = await getRazorpayKeys();
+
     if (!adminRequest) {
       if (!payment?.orderId || !payment?.paymentId || !payment?.signature) {
         return NextResponse.json({ error: "Payment required" }, { status: 402 });
@@ -251,7 +254,7 @@ export async function POST(req: NextRequest) {
         if (!tokenValid) return NextResponse.json({ error: "Invalid coupon token" }, { status: 402 });
         if (await isCouponUsed(couponCode)) return NextResponse.json({ error: "Coupon already used" }, { status: 402 });
       } else {
-        const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature);
+        const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature, keySecret);
         if (!valid) {
           return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
         }
@@ -311,13 +314,24 @@ export async function POST(req: NextRequest) {
       { role: "user" as const, content: a.answer, timestamp: Date.now() },
     ]);
 
+    const paymentRecord: PaymentRecord = {
+      orderId: payment?.orderId ?? "ADMIN",
+      paymentId: payment?.paymentId ?? "ADMIN",
+      amount: isFreeOrder ? 0 : adminRequest ? 0 : (payment?.amount ?? 0),
+      coupon: couponCode,
+      isFree: isFreeOrder ?? false,
+      isAdmin: adminRequest,
+      mode: rzpMode,
+      paidAt: Date.now(),
+    };
+
     await Promise.all([
       saveReport(sessionId, report),
-      updateSession(sessionId, { status: "completed", messages }),
+      updateSession(sessionId, { status: "completed", messages, payment: paymentRecord }),
       ...(isFreeOrder && couponCode ? [
         markCouponUsed(couponCode),
         ...(session.email ? [markEmailCouponUsed(couponCode, session.email), incrementCouponUsage(couponCode, session.email)] : [incrementCouponUsage(couponCode, "unknown")]),
-      ] : payment && !isFreeOrder ? [markPaymentUsed(payment.orderId)] : []),
+      ] : payment && !isFreeOrder && !adminRequest ? [markPaymentUsed(payment.orderId)] : []),
     ]);
 
     return NextResponse.json({ success: true });

@@ -22,12 +22,12 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
-  const { title, body, url } = event.data.json();
+  const { title, body, url, icon, badge } = event.data.json();
   event.waitUntil(
     self.registration.showNotification(title ?? "Devbridge", {
       body: body ?? "",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      icon: icon ?? "/icon-192.png",
+      badge: badge ?? "/icon-192.png",
       data: { url: url ?? "/" },
     })
   );

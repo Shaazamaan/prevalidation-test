@@ -37,11 +37,42 @@ export default function PWAInstallPrompt() {
     const choice = await deferredPrompt.userChoice;
     if (choice.outcome === "accepted") {
       setInstalled(true);
-      // Track install
-      fetch("/api/pwa/install", { method: "POST" }).catch(() => {});
+      await trackInstallAndSubscribe();
     }
     setVisible(false);
   };
+
+  const trackInstallAndSubscribe = async () => {
+    try {
+      let subscription: PushSubscriptionJSON | null = null;
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (vapidKey && "serviceWorker" in navigator && "PushManager" in window) {
+        const reg = await navigator.serviceWorker.ready;
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidKey),
+          });
+          subscription = sub.toJSON();
+        }
+      }
+      await fetch("/api/pwa/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription }),
+      }).catch(() => {});
+    } catch {
+      fetch("/api/pwa/install", { method: "POST" }).catch(() => {});
+    }
+  };
+
+  function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    const padding = "=".repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+  }
 
   const handleDismiss = () => {
     setVisible(false);

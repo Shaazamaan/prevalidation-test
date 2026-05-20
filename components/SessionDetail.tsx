@@ -102,6 +102,22 @@ export default function SessionDetail({ session, report }: Props) {
               {session.startupType && (
                 <span className="text-xs text-[#555] border border-[#222] px-2 py-0.5 rounded">{session.startupType}</span>
               )}
+              {session.payment && !session.payment.isAdmin && (
+                <span className={`text-xs px-2 py-0.5 rounded border ${
+                  session.payment.isFree
+                    ? "border-green-800/40 text-green-400 bg-green-900/10"
+                    : "border-[#E8A838]/40 text-[#E8A838] bg-[#E8A838]/5"
+                }`}>
+                  {session.payment.isFree
+                    ? `FREE · ${session.payment.coupon ?? ""}`
+                    : `₹${(session.payment.amount / 100).toLocaleString("en-IN")} · ${session.payment.mode?.toUpperCase()}`}
+                </span>
+              )}
+              {session.payment?.orderId && session.payment.orderId !== "ADMIN" && (
+                <span className="text-[10px] text-[#444] font-mono border border-[#1a1a1a] px-1.5 py-0.5 rounded">
+                  {session.payment.orderId}
+                </span>
+              )}
               {report && (
                 <span className={`text-xs font-semibold ${VERDICT_STYLES[report.verdict] ?? "text-white"}`}>
                   {report.verdict}

@@ -220,6 +220,7 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
           founderEmail={profileEmail}
           founderPhone={profilePhone}
           receipt={`frc-${sessionId.slice(0, 20)}`}
+          tool="readiness"
           onSuccess={handlePaymentSuccess}
           onCancel={() => setShowPayment(false)}
         />

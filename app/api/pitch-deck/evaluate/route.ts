@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { buildPitchDeckPrompt } from "@/lib/pitch-deck-prompt";
-import { verifyPaymentSignature } from "@/lib/razorpay";
+import { verifyPaymentSignature, getRazorpayKeys } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { savePitchDeckSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage } from "@/lib/db";
+import { savePitchDeckSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, type PaymentRecord } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,7 +12,7 @@ export const maxDuration = 60;
 const TIMEOUT = 30000;
 
 type AIResult = { content: string | null; error?: string };
-type PaymentData = { orderId: string; paymentId: string; signature: string };
+type PaymentData = { orderId: string; paymentId: string; signature: string; amount?: number; couponToken?: string };
 
 interface PitchDeckReport {
   track: string;
@@ -160,6 +160,8 @@ export async function POST(req: NextRequest) {
       }, { status: 503 });
     }
 
+    const { keySecret: rzpSecret, mode: rzpMode } = await getRazorpayKeys();
+
     if (!adminRequest) {
       const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "unknown";
       const ipHash = await hashIP(ip);
@@ -177,7 +179,7 @@ export async function POST(req: NextRequest) {
         if (!tokenValid) return NextResponse.json({ error: "Invalid coupon token" }, { status: 402 });
         if (await isCouponUsed(couponCode)) return NextResponse.json({ error: "Coupon already used" }, { status: 402 });
       } else {
-        const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature);
+        const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature, rzpSecret);
         if (!valid) {
           return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
         }
@@ -225,6 +227,17 @@ export async function POST(req: NextRequest) {
       await markPaymentUsed(payment.orderId);
     }
 
+    const paymentRecord: PaymentRecord = {
+      orderId: payment?.orderId ?? "ADMIN",
+      paymentId: payment?.paymentId ?? "ADMIN",
+      amount: isFreeOrder ? 0 : adminRequest ? 0 : (payment?.amount ?? 0),
+      coupon: couponCode,
+      isFree: isFreeOrder ?? false,
+      isAdmin: adminRequest,
+      mode: rzpMode,
+      paidAt: Date.now(),
+    };
+
     await savePitchDeckSession({
       id: sessionId,
       tool: "pitch-deck",
@@ -239,6 +252,7 @@ export async function POST(req: NextRequest) {
       overallVerdict: report.overallVerdict,
       createdAt: Date.now(),
       ipHash,
+      payment: paymentRecord,
     });
 
     return NextResponse.json({ success: true, report, sessionId });

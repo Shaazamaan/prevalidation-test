@@ -36,6 +36,7 @@ export interface PaymentResult {
   paymentId: string;
   signature: string;
   couponToken?: string;
+  amount: number; // paise
 }
 
 interface Props {
@@ -46,6 +47,7 @@ interface Props {
   onSuccess: (payment: PaymentResult) => void;
   onCancel: () => void;
   receipt: string;
+  tool?: "readiness" | "advisor" | "pitchdeck";
 }
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -70,11 +72,13 @@ export default function PaymentModal({
   onSuccess,
   onCancel,
   receipt,
+  tool = "readiness",
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [rzpKeyId, setRzpKeyId] = useState(process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "");
+  const [baseAmount, setBaseAmount] = useState(99900);
 
   const [coupon, setCoupon] = useState("");
   const [couponStatus, setCouponStatus] = useState<null | "valid" | "invalid" | "checking">(null);
@@ -88,7 +92,11 @@ export default function PaymentModal({
       .then((r) => r.json())
       .then((d: { keyId?: string }) => { if (d.keyId) setRzpKeyId(d.keyId); })
       .catch(() => {});
-  }, []);
+    fetch(`/api/payment/price?tool=${tool}`)
+      .then((r) => r.json())
+      .then((d: { amountPaise?: number }) => { if (d.amountPaise) setBaseAmount(d.amountPaise); })
+      .catch(() => {});
+  }, [tool]);
 
   const applyCoupon = async () => {
     if (!coupon.trim()) return;
@@ -113,8 +121,9 @@ export default function PaymentModal({
     }
   };
 
-  const discountedAmount = discount > 0 ? Math.round(99900 * (1 - discount / 100)) : 99900;
-  const displayPrice = discount > 0 ? `₹${(discountedAmount / 100).toLocaleString("en-IN")}` : "₹999";
+  const discountedAmount = discount > 0 ? Math.round(baseAmount * (1 - discount / 100)) : baseAmount;
+  const baseDisplay = `₹${(baseAmount / 100).toLocaleString("en-IN")}`;
+  const displayPrice = discount > 0 ? `₹${(discountedAmount / 100).toLocaleString("en-IN")}` : baseDisplay;
 
   const handlePay = async () => {
     if (!agreed) return;
@@ -127,6 +136,7 @@ export default function PaymentModal({
         paymentId: "FREE",
         signature: couponToken ?? "",
         couponToken,
+        amount: 0,
       });
       return;
     }
@@ -142,7 +152,7 @@ export default function PaymentModal({
       const orderRes = await fetch("/api/payment/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receipt, discount: discount > 0 ? discount : undefined }),
+        body: JSON.stringify({ receipt, discount: discount > 0 ? discount : undefined, tool }),
       });
 
       if (!orderRes.ok) {
@@ -167,6 +177,7 @@ export default function PaymentModal({
             paymentId: response.razorpay_payment_id,
             signature: response.razorpay_signature,
             couponToken,
+            amount,
           });
         },
         prefill: {
@@ -200,7 +211,7 @@ export default function PaymentModal({
             <span className="text-[#888] text-sm">{description}</span>
             <div className="text-right">
               {discount > 0 && (
-                <span className="text-[#555] text-sm line-through mr-2">₹999</span>
+                <span className="text-[#555] text-sm line-through mr-2">{baseDisplay}</span>
               )}
               <span className="text-[#E8A838] font-bold text-xl">{displayPrice}</span>
             </div>

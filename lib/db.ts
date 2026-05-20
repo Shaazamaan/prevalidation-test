@@ -6,6 +6,17 @@ export type Message = {
   timestamp: number;
 };
 
+export type PaymentRecord = {
+  orderId: string;
+  paymentId: string;
+  amount: number; // paise (0 for free/admin)
+  coupon?: string;
+  isFree: boolean;
+  isAdmin: boolean;
+  mode: "test" | "live";
+  paidAt: number; // unix ms
+};
+
 export type Session = {
   id: string;
   founderName: string;
@@ -20,6 +31,7 @@ export type Session = {
   ipHash: string;
   adminNotes?: string;
   lastActivePhase?: number;
+  payment?: PaymentRecord;
 };
 
 export type PhaseScore = {
@@ -68,6 +80,7 @@ export type AdvisorSession = {
   createdAt: number;
   ipHash: string;
   adminNotes?: string;
+  payment?: PaymentRecord;
 };
 
 export type PitchDeckSession = {
@@ -85,6 +98,7 @@ export type PitchDeckSession = {
   createdAt: number;
   ipHash: string;
   adminNotes?: string;
+  payment?: PaymentRecord;
 };
 
 const SESSION_TTL = 90 * 24 * 60 * 60; // 90 days in seconds
@@ -231,6 +245,46 @@ export async function hashIP(ip: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// ── Razorpay mode ────────────────────────────────────────────────────────────
+
+export async function getRazorpayMode(): Promise<"test" | "live"> {
+  const stored = await kv.get<string>("razorpay:mode");
+  if (stored === "live") return "live";
+  if (stored === "test") return "test";
+  return process.env.PAYMENT_MODE === "live" ? "live" : "test";
+}
+
+export async function setRazorpayMode(mode: "test" | "live"): Promise<void> {
+  await kv.set("razorpay:mode", mode);
+}
+
+// ── Tool pricing ────────────────────────────────────────────────────────────
+
+export type ToolKey = "readiness" | "advisor" | "pitchdeck";
+const DEFAULT_PRICE = 99900; // paise
+
+export async function getToolPrice(tool: ToolKey): Promise<number> {
+  const stored = await kv.get<number>(`pricing:${tool}`);
+  return stored ?? DEFAULT_PRICE;
+}
+
+export async function setToolPrice(tool: ToolKey, amountPaise: number): Promise<void> {
+  await kv.set(`pricing:${tool}`, amountPaise);
+}
+
+export async function getAllToolPrices(): Promise<Record<ToolKey, number>> {
+  const [r, a, p] = await Promise.all([
+    kv.get<number>("pricing:readiness"),
+    kv.get<number>("pricing:advisor"),
+    kv.get<number>("pricing:pitchdeck"),
+  ]);
+  return {
+    readiness: r ?? DEFAULT_PRICE,
+    advisor: a ?? DEFAULT_PRICE,
+    pitchdeck: p ?? DEFAULT_PRICE,
+  };
 }
 
 // ── Site control ────────────────────────────────────────────────────────────

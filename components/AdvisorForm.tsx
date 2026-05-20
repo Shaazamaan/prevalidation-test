@@ -52,6 +52,14 @@ export default function AdvisorForm() {
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
   const [profileCountry, setProfileCountry] = useState("");
+  const [toolPrice, setToolPrice] = useState("₹999");
+
+  useEffect(() => {
+    fetch("/api/payment/price?tool=advisor")
+      .then((r) => r.json())
+      .then((d: { display?: string }) => { if (d.display) setToolPrice(d.display); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (profileLoaded) return;
@@ -126,7 +134,7 @@ export default function AdvisorForm() {
           founderName: intake.founderName,
           tool: "Startup Viability Advisor",
           reportUrl: window.location.origin + "/advisor/report/" + data.sessionId,
-          amount: isFree ? 0 : 99900,
+          amount: payment.amount,
           date: new Date(),
         });
         router.push("/advisor/report/" + data.sessionId);
@@ -163,6 +171,7 @@ export default function AdvisorForm() {
           founderEmail={profileEmail}
           founderPhone={profilePhone}
           receipt={`adv-${Date.now().toString(36)}`}
+          tool="advisor"
           onSuccess={handlePaymentSuccess}
           onCancel={() => setShowPayment(false)}
         />
@@ -350,7 +359,7 @@ export default function AdvisorForm() {
           disabled={!canProceed}
           className="flex-1 bg-[#E8A838] text-black font-semibold px-4 py-2.5 rounded-lg text-sm hover:bg-[#d4962e] transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {section === SECTIONS.length - 1 ? "Pay ₹999 & Get Report →" : "Next →"}
+          {section === SECTIONS.length - 1 ? `Pay ${toolPrice} & Get Report →` : "Next →"}
         </button>
       </div>
 
