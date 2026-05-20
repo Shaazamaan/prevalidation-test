@@ -82,25 +82,34 @@ export default function SessionDetail({ session, report }: Props) {
 
         {/* Transcript */}
         {tab === "transcript" && (
-          <div className="space-y-4">
-            {session.messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}>
-                <div
-                  className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed ${
-                    msg.role === "assistant"
-                      ? "bg-[#141414] border border-[#2a2a2a] text-[#e0e0e0]"
-                      : "bg-[#1a1200] border border-[#3a2800] text-[#f5d9a0]"
-                  }`}
-                >
-                  <p className="text-xs text-[#555] mb-1 uppercase">{msg.role}</p>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                  <p className="text-xs text-[#444] mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</p>
-                </div>
-              </div>
-            ))}
+          <div className="space-y-5">
             {session.messages.length === 0 && (
-              <p className="text-[#555] text-sm">No messages yet.</p>
+              <p className="text-[#555] text-sm">No answers recorded yet.</p>
             )}
+            {(() => {
+              const pairs: { question: string; answer: string; index: number }[] = [];
+              for (let i = 0; i < session.messages.length - 1; i += 2) {
+                const q = session.messages[i];
+                const a = session.messages[i + 1];
+                if (q?.role === "assistant" && a?.role === "user") {
+                  pairs.push({ question: q.content, answer: a.content, index: i / 2 });
+                }
+              }
+              return pairs.map((p) => (
+                <div key={p.index} className="bg-[#111] border border-[#222] rounded-xl p-5">
+                  <p className="text-xs font-semibold text-[#E8A838] uppercase mb-2">
+                    {p.question.startsWith("Q") ? p.question.split(":")[0] : `Q${p.index + 1}`}
+                  </p>
+                  <p className="text-[#aaa] text-sm mb-3 leading-relaxed">
+                    {p.question.includes(":") ? p.question.slice(p.question.indexOf(":") + 1).trim() : p.question}
+                  </p>
+                  <div className="border-t border-[#1a1a1a] pt-3">
+                    <p className="text-xs text-[#555] uppercase mb-1">Answer</p>
+                    <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{p.answer}</p>
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
         )}
 
