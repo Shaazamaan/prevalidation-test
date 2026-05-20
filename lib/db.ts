@@ -9,6 +9,9 @@ export type Message = {
 export type Session = {
   id: string;
   founderName: string;
+  email?: string;
+  phone?: string;
+  country?: string;
   startupIdea: string;
   startupType?: string;
   messages: Message[];

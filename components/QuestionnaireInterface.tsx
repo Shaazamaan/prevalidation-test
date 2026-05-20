@@ -49,9 +49,19 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
   const [tipIndex, setTipIndex] = useState(0);
   const [showPhaseNav, setShowPhaseNav] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
 
   useEffect(() => {
     setMounted(true);
+    try {
+      const raw = localStorage.getItem("dbk_profile");
+      if (raw) {
+        const p = JSON.parse(raw) as { email?: string; phone?: string; countryCode?: string };
+        if (p.email) setProfileEmail(p.email);
+        if (p.phone) setProfilePhone(`${p.countryCode ?? ""} ${p.phone}`.trim());
+      }
+    } catch {}
     try {
       const storedAnswers = localStorage.getItem(STORAGE_KEY(sessionId));
       const parsedAnswers = storedAnswers ? JSON.parse(storedAnswers) : null;
@@ -210,6 +220,8 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
         <PaymentModal
           description="Founder Readiness Report"
           founderName={founderName}
+          founderEmail={profileEmail}
+          founderPhone={profilePhone}
           receipt={`frc-${sessionId.slice(0, 20)}`}
           onSuccess={handlePaymentSuccess}
           onCancel={() => setShowPayment(false)}

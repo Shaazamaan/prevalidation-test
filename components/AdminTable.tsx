@@ -14,11 +14,14 @@ const VERDICT_BADGE: Record<string, string> = {
 
 function exportCSV(sessions: EnrichedSession[]) {
   const headers = [
-    "Name", "Startup Idea", "Startup Type", "Verdict", "Reality Score",
+    "Name", "Email", "Phone", "Country", "Startup Idea", "Startup Type", "Verdict", "Reality Score",
     "Status", "Created At", "Admin Notes",
   ];
   const rows = sessions.map((s) => [
     s.founderName,
+    s.email ?? "",
+    s.phone ?? "",
+    s.country ?? "",
     `"${(s.startupIdea ?? "").replace(/"/g, '""')}"`,
     s.startupType ?? "",
     s.report?.verdict ?? "",
@@ -124,8 +127,11 @@ export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }
                 <td className="px-4 py-3">
                   <div>
                     <p className="text-white font-medium">{s.founderName}</p>
+                    {s.email && <p className="text-[#555] text-xs mt-0.5">{s.email}</p>}
+                    {s.phone && <p className="text-[#444] text-xs">{s.phone}</p>}
+                    {s.country && <p className="text-[#444] text-xs">{s.country}</p>}
                     {s.startupType && (
-                      <p className="text-[#444] text-xs mt-0.5">{s.startupType}</p>
+                      <p className="text-[#444] text-xs mt-0.5 border-t border-[#1a1a1a] pt-0.5">{s.startupType}</p>
                     )}
                   </div>
                 </td>

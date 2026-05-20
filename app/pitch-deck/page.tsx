@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PitchDeckForm from "@/components/PitchDeckForm";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "Pitch Deck Validator — Devbridge",
@@ -40,7 +41,9 @@ export default function PitchDeckPage() {
         </div>
 
         <div className="bg-[#111] border border-[#222] rounded-xl p-5 sm:p-7 mb-6">
+          <Suspense>
           <PitchDeckForm />
+        </Suspense>
         </div>
 
         <div className="space-y-2 mb-6">

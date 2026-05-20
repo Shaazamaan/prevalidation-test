@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import PaymentModal, { type PaymentResult } from "@/components/PaymentModal";
+
+const PROFILE_KEY = "dbk_profile";
+function loadProfile(): { name?: string; email?: string; phone?: string; countryCode?: string } {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) ?? "{}"); } catch { return {}; }
+}
 
 type PitchDeckReport = Record<string, unknown> & {
   track: string;
@@ -56,6 +61,16 @@ export default function PitchDeckForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [report, setReport] = useState<PitchDeckReport | null>(null);
+  const [profile, setProfile] = useState<{ name?: string; email?: string; phone?: string }>({});
+
+  useEffect(() => {
+    const p = loadProfile();
+    setProfile({
+      name: p.name,
+      email: p.email,
+      phone: p.phone ? `${p.countryCode ?? ""} ${p.phone}`.trim() : undefined,
+    });
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -301,6 +316,9 @@ export default function PitchDeckForm() {
       {showPayment && (
         <PaymentModal
           description="Pitch Deck Evaluation Report"
+          founderName={profile.name}
+          founderEmail={profile.email}
+          founderPhone={profile.phone}
           receipt={`ptch-${Date.now().toString(36)}`}
           onSuccess={handlePaymentSuccess}
           onCancel={() => setShowPayment(false)}

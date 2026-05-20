@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import PaymentModal, { type PaymentResult } from "@/components/PaymentModal";
 import type { AdvisorIntake } from "@/lib/advisor-prompt";
 
@@ -56,13 +56,39 @@ function Field({ label, required, children }: { label: string; required?: boolea
 const INPUT = "w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white text-sm placeholder-[#444] focus:outline-none focus:border-[#E8A838] transition";
 const TEXTAREA = `${INPUT} resize-none`;
 
+const PROFILE_KEY = "dbk_profile";
+
+function loadProfile(): { name?: string; email?: string; phone?: string; country?: string; countryCode?: string } {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
 export default function AdvisorForm() {
   const [section, setSection] = useState(0);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [intake, setIntake] = useState<Partial<AdvisorIntake>>({});
   const [showPayment, setShowPayment] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [report, setReport] = useState<AdvisorReport | null>(null);
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+
+  // Pre-fill from landing page profile (runs once on mount)
+  useEffect(() => {
+    if (profileLoaded) return;
+    const p = loadProfile();
+    setProfileLoaded(true);
+    if (p.email) setProfileEmail(p.email);
+    if (p.phone) setProfilePhone(`${p.countryCode ?? ""} ${p.phone ?? ""}`.trim());
+    setIntake((prev) => ({
+      ...prev,
+      founderName: prev.founderName || p.name || "",
+      location: prev.location || p.country || "",
+    }));
+  }, [profileLoaded]);
 
   const set = (field: keyof AdvisorIntake) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setIntake((prev) => ({ ...prev, [field]: e.target.value }));
@@ -247,6 +273,8 @@ export default function AdvisorForm() {
         <PaymentModal
           description="Startup Viability Report"
           founderName={intake.founderName}
+          founderEmail={profileEmail}
+          founderPhone={profilePhone}
           receipt={`adv-${Date.now().toString(36)}`}
           onSuccess={handlePaymentSuccess}
           onCancel={() => setShowPayment(false)}

@@ -16,7 +16,7 @@ interface RazorpayOptions {
   description: string;
   order_id: string;
   handler: (response: RazorpayResponse) => void;
-  prefill?: { name?: string; email?: string };
+  prefill?: { name?: string; email?: string; contact?: string };
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
 }
@@ -40,6 +40,8 @@ export interface PaymentResult {
 interface Props {
   description?: string;
   founderName?: string;
+  founderEmail?: string;
+  founderPhone?: string;
   onSuccess: (payment: PaymentResult) => void;
   onCancel: () => void;
   receipt: string;
@@ -57,15 +59,27 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
-export default function PaymentModal({ description = "AI Evaluation Report", founderName, onSuccess, onCancel, receipt }: Props) {
+const DISCLAIMER = "This is an AI-generated evaluation provided for informational purposes only. It does not constitute financial, legal, investment, or business advice. Results may vary based on the information provided. Devbridge and its AI systems may make errors. This report should not be the sole basis for any business decision.";
+
+export default function PaymentModal({
+  description = "AI Evaluation Report",
+  founderName,
+  founderEmail,
+  founderPhone,
+  onSuccess,
+  onCancel,
+  receipt,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [agreed, setAgreed] = useState(false);
 
   useEffect(() => {
     loadRazorpayScript();
   }, []);
 
   const handlePay = async () => {
+    if (!agreed) return;
     setLoading(true);
     setError("");
 
@@ -106,12 +120,15 @@ export default function PaymentModal({ description = "AI Evaluation Report", fou
             signature: response.razorpay_signature,
           });
         },
-        prefill: { name: founderName ?? "" },
+        prefill: {
+          name: founderName ?? "",
+          email: founderEmail ?? "",
+          contact: founderPhone ?? "",
+        },
         theme: { color: "#E8A838" },
         modal: {
           ondismiss: () => {
             setLoading(false);
-            onCancel();
           },
         },
       });
@@ -124,24 +141,45 @@ export default function PaymentModal({ description = "AI Evaluation Report", fou
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 px-4">
-      <div className="bg-[#111] border border-[#333] rounded-2xl p-7 max-w-sm w-full">
+    <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 px-4 overflow-y-auto py-6">
+      <div className="bg-[#111] border border-[#333] rounded-2xl p-6 max-w-sm w-full my-auto">
         <h2 className="font-crimson text-2xl text-white mb-1">Generate Your Report</h2>
-        <p className="text-[#888] text-sm mb-5">
-          One-time payment required to generate your AI evaluation.
-        </p>
+        <p className="text-[#666] text-sm mb-5">One-time payment · AI evaluation delivered instantly.</p>
 
-        <div className="bg-[#0d0d0d] border border-[#222] rounded-xl p-4 mb-5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[#666] text-sm">{description}</span>
-            <span className="text-[#E8A838] font-semibold text-lg">₹999</span>
+        {/* Price */}
+        <div className="bg-[#0d0d0d] border border-[#222] rounded-xl p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <span className="text-[#888] text-sm">{description}</span>
+            <span className="text-[#E8A838] font-bold text-xl">₹999</span>
           </div>
-          <p className="text-xs text-[#444]">Includes full report, scores, and actionable next steps.</p>
+          <p className="text-xs text-[#444] mt-1">Includes full report, scores, and next steps.</p>
         </div>
 
+        {/* Disclaimer */}
+        <div className="bg-amber-900/10 border border-amber-800/30 rounded-xl p-3 mb-4">
+          <p className="text-xs text-[#666] uppercase tracking-wide mb-2 font-medium">Important Disclaimer</p>
+          <p className="text-xs text-[#777] leading-relaxed">{DISCLAIMER}</p>
+        </div>
+
+        {/* Agree checkbox */}
+        <label className="flex items-start gap-3 mb-4 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="accent-[#E8A838] mt-0.5 w-4 h-4 shrink-0"
+          />
+          <span className={`text-xs leading-relaxed transition ${agreed ? "text-[#aaa]" : "text-[#555] group-hover:text-[#666]"}`}>
+            I understand this is an AI-generated advisory report and not professional advice. I agree to the{" "}
+            <a href="/terms" target="_blank" className="underline hover:text-[#E8A838]">Terms of Service</a>{" "}
+            and{" "}
+            <a href="/refund-policy" target="_blank" className="underline hover:text-[#E8A838]">Refund Policy</a>.
+          </span>
+        </label>
+
         {error && (
-          <div className="bg-red-900/20 border border-red-800/30 rounded-lg px-4 py-3 mb-4">
-            <p className="text-red-400 text-sm">{error}</p>
+          <div className="bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2 mb-4">
+            <p className="text-red-400 text-xs">{error}</p>
           </div>
         )}
 
@@ -149,26 +187,21 @@ export default function PaymentModal({ description = "AI Evaluation Report", fou
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 bg-[#222] text-white py-3 rounded-xl text-sm hover:bg-[#333] transition disabled:opacity-50"
+            className="flex-1 bg-[#1a1a1a] border border-[#333] text-[#666] py-3 rounded-xl text-sm hover:text-white hover:border-[#444] transition disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handlePay}
-            disabled={loading}
-            className="flex-1 bg-[#E8A838] text-black font-semibold py-3 rounded-xl text-sm hover:bg-[#d4962e] transition disabled:opacity-60"
+            disabled={loading || !agreed}
+            className="flex-1 bg-[#E8A838] text-black font-semibold py-3 rounded-xl text-sm hover:bg-[#d4962e] transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {loading ? "Opening…" : "Pay ₹999"}
           </button>
         </div>
 
-        <p className="text-center text-xs text-[#444] mt-4">
-          Secured by Razorpay · UPI, Cards, Net Banking accepted
-        </p>
-        <p className="text-center text-xs text-[#333] mt-1">
-          By paying you agree to our{" "}
-          <a href="/terms" className="underline hover:text-[#555]">Terms</a> &amp;{" "}
-          <a href="/refund-policy" className="underline hover:text-[#555]">Refund Policy</a>
+        <p className="text-center text-xs text-[#333] mt-4">
+          Secured by Razorpay · UPI · Cards · Net Banking
         </p>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import AdvisorForm from "@/components/AdvisorForm";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "Startup Viability Advisor — Devbridge",
@@ -41,7 +42,9 @@ export default function AdvisorPage() {
         </div>
 
         <div className="bg-[#111] border border-[#222] rounded-xl p-5 sm:p-7 mb-6">
+          <Suspense>
           <AdvisorForm />
+        </Suspense>
         </div>
 
         <div className="space-y-2 mb-6">

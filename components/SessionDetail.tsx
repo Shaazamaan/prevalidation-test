@@ -90,6 +90,15 @@ export default function SessionDetail({ session, report }: Props) {
             <p className="text-[#666] text-sm mt-1 max-w-xl leading-relaxed">{session.startupIdea}</p>
             <div className="flex flex-wrap gap-3 mt-2">
               <p className="text-[#444] text-xs">{new Date(session.createdAt).toLocaleString()}</p>
+              {session.email && (
+                <a href={`mailto:${session.email}`} className="text-xs text-[#555] hover:text-[#E8A838] transition">{session.email}</a>
+              )}
+              {session.phone && (
+                <span className="text-xs text-[#555]">{session.phone}</span>
+              )}
+              {session.country && (
+                <span className="text-xs text-[#555] border border-[#222] px-2 py-0.5 rounded">{session.country}</span>
+              )}
               {session.startupType && (
                 <span className="text-xs text-[#555] border border-[#222] px-2 py-0.5 rounded">{session.startupType}</span>
               )}
