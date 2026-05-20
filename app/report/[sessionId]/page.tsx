@@ -2,6 +2,15 @@ import { notFound } from "next/navigation";
 import { getReport, getSession } from "@/lib/db";
 import ReportDisplay from "@/components/ReportDisplay";
 
+export async function generateMetadata({ params }: { params: { sessionId: string } }) {
+  const session = await getSession(params.sessionId);
+  if (!session) return {};
+  return {
+    title: `Readiness Report — ${session.founderName}`,
+    description: `Startup pre-validation readiness report for ${session.founderName}.`,
+  };
+}
+
 export default async function ReportPage({ params }: { params: { sessionId: string } }) {
   const [report, session] = await Promise.all([
     getReport(params.sessionId),
@@ -10,17 +19,9 @@ export default async function ReportPage({ params }: { params: { sessionId: stri
 
   if (!report || !session) notFound();
 
-  const founderReport = {
-    verdict: report.verdict,
-    verdictExplanation: report.verdictExplanation,
-    mustResolveBeforeValidation: report.mustResolveBeforeValidation,
-    killSignals: report.killSignals,
-    finalSummary: report.finalSummary,
-  };
-
   return (
     <ReportDisplay
-      report={founderReport}
+      report={report}
       founderName={session.founderName}
       sessionId={params.sessionId}
     />

@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
-import { getSession } from "@/lib/db";
+import { getSession, getReport } from "@/lib/db";
 import QuestionnaireInterface from "@/components/QuestionnaireInterface";
 import ReportDisplay from "@/components/ReportDisplay";
-import { getReport } from "@/lib/db";
 
 export default async function ChatPage({ params }: { params: { sessionId: string } }) {
   const session = await getSession(params.sessionId);
@@ -13,13 +12,7 @@ export default async function ChatPage({ params }: { params: { sessionId: string
     if (report) {
       return (
         <ReportDisplay
-          report={{
-            verdict: report.verdict,
-            verdictExplanation: report.verdictExplanation,
-            mustResolveBeforeValidation: report.mustResolveBeforeValidation,
-            killSignals: report.killSignals,
-            finalSummary: report.finalSummary,
-          }}
+          report={report}
           founderName={session.founderName}
           sessionId={params.sessionId}
         />

@@ -10,7 +10,7 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    const { founderName, startupIdea } = await req.json();
+    const { founderName, startupIdea, startupType } = await req.json();
     if (!founderName || !startupIdea) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       id,
       founderName,
       startupIdea,
+      startupType: startupType ?? "Not specified",
       messages: [],
       status: "active",
       createdAt: Date.now(),

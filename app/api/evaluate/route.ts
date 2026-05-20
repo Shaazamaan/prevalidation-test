@@ -8,7 +8,7 @@ export const maxDuration = 60;
 
 type AIResult = { content: string | null; error?: string };
 
-const TIMEOUT = 12000;
+const TIMEOUT = 20000;
 
 async function callGroq(prompt: string): Promise<AIResult> {
   try {
@@ -23,7 +23,7 @@ async function callGroq(prompt: string): Promise<AIResult> {
         model: "llama-3.1-8b-instant",
         messages: [{ role: "user", content: prompt }],
         stream: false,
-        max_tokens: 1200,
+        max_tokens: 3000,
         temperature: 0.3,
       }),
     });
@@ -32,6 +32,28 @@ async function callGroq(prompt: string): Promise<AIResult> {
     return { content: data.choices?.[0]?.message?.content ?? null };
   } catch (e) {
     return { content: null, error: `Groq exception: ${String(e)}` };
+  }
+}
+
+async function callGemini(prompt: string): Promise<AIResult> {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
+      {
+        method: "POST",
+        signal: AbortSignal.timeout(TIMEOUT),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 3000 },
+        }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) return { content: null, error: `Gemini ${res.status}: ${data?.error?.message}` };
+    return { content: data.candidates?.[0]?.content?.parts?.[0]?.text ?? null };
+  } catch (e) {
+    return { content: null, error: `Gemini exception: ${String(e)}` };
   }
 }
 
@@ -48,7 +70,7 @@ async function callNvidia(prompt: string): Promise<AIResult> {
         model: "meta/llama-3.1-8b-instruct",
         messages: [{ role: "user", content: prompt }],
         stream: false,
-        max_tokens: 1200,
+        max_tokens: 3000,
         temperature: 0.3,
       }),
     });
@@ -57,28 +79,6 @@ async function callNvidia(prompt: string): Promise<AIResult> {
     return { content: data.choices?.[0]?.message?.content ?? null };
   } catch (e) {
     return { content: null, error: `Nvidia exception: ${String(e)}` };
-  }
-}
-
-async function callGemini(prompt: string): Promise<AIResult> {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GOOGLE_AI_API_KEY}`,
-      {
-        method: "POST",
-        signal: AbortSignal.timeout(TIMEOUT),
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 1200 },
-        }),
-      }
-    );
-    const data = await res.json();
-    if (!res.ok) return { content: null, error: `Gemini ${res.status}: ${data?.error?.message}` };
-    return { content: data.candidates?.[0]?.content?.parts?.[0]?.text ?? null };
-  } catch (e) {
-    return { content: null, error: `Gemini exception: ${String(e)}` };
   }
 }
 
@@ -97,7 +97,7 @@ async function callOpenRouter(prompt: string): Promise<AIResult> {
         model: "mistralai/mistral-7b-instruct:free",
         messages: [{ role: "user", content: prompt }],
         stream: false,
-        max_tokens: 1200,
+        max_tokens: 3000,
         temperature: 0.3,
       }),
     });
@@ -109,31 +109,78 @@ async function callOpenRouter(prompt: string): Promise<AIResult> {
   }
 }
 
+async function raceFirst(fns: (() => Promise<AIResult>)[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    let settled = 0;
+    const total = fns.length;
+    if (total === 0) { resolve(null); return; }
+    fns.forEach((fn) => {
+      fn()
+        .then((result) => {
+          settled++;
+          if (result.content) {
+            resolve(result.content);
+          } else {
+            console.error(`[Evaluate] Provider failed: ${result.error}`);
+            if (settled === total) resolve(null);
+          }
+        })
+        .catch((err) => {
+          settled++;
+          console.error(`[Evaluate] Provider threw: ${String(err)}`);
+          if (settled === total) resolve(null);
+        });
+    });
+  });
+}
+
 async function getAIResponse(prompt: string): Promise<string | null> {
-  const providers = [callGroq, callNvidia, callGemini, callOpenRouter];
-  for (const provider of providers) {
-    const result = await provider(prompt);
-    if (result.content) return result.content;
-    console.error(`[Evaluate] ${result.error}`);
-  }
-  return null;
+  // Try Groq + Gemini in parallel first (highest capacity/quality)
+  const first = await raceFirst([
+    () => callGroq(prompt),
+    () => callGemini(prompt),
+  ]);
+  if (first) return first;
+
+  // Fallback: NVIDIA + OpenRouter in parallel
+  const second = await raceFirst([
+    () => callNvidia(prompt),
+    () => callOpenRouter(prompt),
+  ]);
+  return second;
 }
 
 function extractReport(text: string): Report | null {
   const match = /<REPORT>([\s\S]*?)<\/REPORT>/.exec(text);
   if (!match) return null;
   try {
-    return JSON.parse(match[1].trim()) as Report;
+    const parsed = JSON.parse(match[1].trim()) as Report;
+    // Validate required fields exist
+    if (!parsed.verdict || !parsed.finalSummary) return null;
+    return parsed;
   } catch {
     return null;
   }
+}
+
+function isReportComplete(report: Report): boolean {
+  return (
+    ["READY", "CONDITIONALLY READY", "NOT READY"].includes(report.verdict) &&
+    typeof report.realityScore === "number" &&
+    Array.isArray(report.phaseScores) &&
+    report.phaseScores.length > 0 &&
+    Array.isArray(report.mustResolveBeforeValidation) &&
+    report.mustResolveBeforeValidation.length > 0 &&
+    typeof report.finalSummary === "string" &&
+    report.finalSummary.length > 10
+  );
 }
 
 export async function POST(req: NextRequest) {
   try {
     const { sessionId, answers } = await req.json() as {
       sessionId: string;
-      answers: { question: string; answer: string }[];
+      answers: { question: string; answer: string; phase?: number }[];
     };
 
     if (!sessionId || !answers?.length) {
@@ -146,7 +193,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Already completed" }, { status: 403 });
     }
 
-    const prompt = buildEvaluationPrompt(session.founderName, session.startupIdea, answers);
+    const prompt = buildEvaluationPrompt(
+      session.founderName,
+      session.startupIdea,
+      answers,
+      session.startupType
+    );
     const content = await getAIResponse(prompt);
 
     if (!content) {
@@ -158,12 +210,25 @@ export async function POST(req: NextRequest) {
 
     const report = extractReport(content);
     if (!report) {
-      console.error("[Evaluate] Could not parse REPORT. Raw:", content.slice(0, 600));
+      console.error("[Evaluate] Could not parse REPORT. Raw:", content.slice(0, 800));
       return NextResponse.json(
         { error: "Failed to parse evaluation. Please try again." },
         { status: 500 }
       );
     }
+
+    if (!isReportComplete(report)) {
+      console.error("[Evaluate] Report incomplete:", JSON.stringify(report).slice(0, 400));
+      return NextResponse.json(
+        { error: "Evaluation incomplete. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    // Ensure arrays that may be missing are initialised
+    report.contradictions = report.contradictions ?? [];
+    report.nextSteps = report.nextSteps ?? [];
+    report.phaseScores = report.phaseScores ?? [];
 
     const messages = answers.flatMap((a, i) => [
       { role: "assistant" as const, content: `Q${i + 1}: ${a.question}`, timestamp: Date.now() },

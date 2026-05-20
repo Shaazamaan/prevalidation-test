@@ -10,15 +10,28 @@ export type Session = {
   id: string;
   founderName: string;
   startupIdea: string;
+  startupType?: string;
   messages: Message[];
   status: "active" | "completed";
   createdAt: number;
   ipHash: string;
+  adminNotes?: string;
+  lastActivePhase?: number;
+};
+
+export type PhaseScore = {
+  phase: number;
+  title: string;
+  score: number;
+  note: string;
 };
 
 export type Report = {
   verdict: "READY" | "CONDITIONALLY READY" | "NOT READY";
   verdictExplanation: string;
+  realityScore: number;
+  phaseScores: PhaseScore[];
+  contradictions: string[];
   founderStressTest: {
     solid: string[];
     gaps: string[];
@@ -32,12 +45,15 @@ export type Report = {
   whatFounderDoesNotKnow: string[];
   mostDangerousAssumptions: string[];
   mustResolveBeforeValidation: string[];
+  nextSteps: string[];
   killSignals: string[];
   finalSummary: string;
 };
 
+const SESSION_TTL = 90 * 24 * 60 * 60; // 90 days in seconds
+
 export async function createSession(session: Session): Promise<void> {
-  await kv.set(`session:${session.id}`, session);
+  await kv.set(`session:${session.id}`, session, { ex: SESSION_TTL });
 }
 
 export async function getSession(id: string): Promise<Session | null> {
@@ -47,11 +63,11 @@ export async function getSession(id: string): Promise<Session | null> {
 export async function updateSession(id: string, data: Partial<Session>): Promise<void> {
   const session = await getSession(id);
   if (!session) throw new Error("Session not found");
-  await kv.set(`session:${id}`, { ...session, ...data });
+  await kv.set(`session:${id}`, { ...session, ...data }, { ex: SESSION_TTL });
 }
 
 export async function saveReport(sessionId: string, report: Report): Promise<void> {
-  await kv.set(`report:${sessionId}`, report);
+  await kv.set(`report:${sessionId}`, report, { ex: SESSION_TTL });
 }
 
 export async function getReport(sessionId: string): Promise<Report | null> {
@@ -63,6 +79,11 @@ export async function getAllSessions(): Promise<Session[]> {
   if (!keys.length) return [];
   const sessions = await Promise.all(keys.map((k) => kv.get<Session>(k)));
   return (sessions.filter(Boolean) as Session[]).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function getSessionCount(): Promise<number> {
+  const keys = await kv.keys("session:*");
+  return keys.length;
 }
 
 export async function deleteSession(id: string): Promise<void> {

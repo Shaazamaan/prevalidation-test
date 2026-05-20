@@ -12,6 +12,31 @@ const VERDICT_BADGE: Record<string, string> = {
   "NOT READY": "bg-red-900/40 text-red-400 border-red-800",
 };
 
+function exportCSV(sessions: EnrichedSession[]) {
+  const headers = [
+    "Name", "Startup Idea", "Startup Type", "Verdict", "Reality Score",
+    "Status", "Created At", "Admin Notes",
+  ];
+  const rows = sessions.map((s) => [
+    s.founderName,
+    `"${(s.startupIdea ?? "").replace(/"/g, '""')}"`,
+    s.startupType ?? "",
+    s.report?.verdict ?? "",
+    s.report?.realityScore ?? "",
+    s.status,
+    new Date(s.createdAt).toISOString(),
+    `"${(s.adminNotes ?? "").replace(/"/g, '""')}"`,
+  ]);
+  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `sessions-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
@@ -22,10 +47,14 @@ export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }
 
   const filtered = sessions.filter((s) => {
     const verdict = s.report?.verdict ?? "";
-    const matchFilter = filter === "All" || verdict === filter;
+    const matchFilter =
+      filter === "All" ||
+      (filter === "In Progress" && s.status === "active") ||
+      verdict === filter;
     const matchSearch =
       s.founderName.toLowerCase().includes(search.toLowerCase()) ||
-      s.startupIdea.toLowerCase().includes(search.toLowerCase());
+      s.startupIdea.toLowerCase().includes(search.toLowerCase()) ||
+      (s.startupType ?? "").toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
 
@@ -46,11 +75,11 @@ export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }
 
   return (
     <div>
-      {/* Search + Filter */}
+      {/* Search + Filter + Export */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <input
           type="text"
-          placeholder="Search by name or idea…"
+          placeholder="Search by name, idea, or type…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="flex-1 bg-[#111] border border-[#222] rounded-lg px-3 py-2 text-white text-sm placeholder-[#444] focus:outline-none focus:border-[#E8A838]"
@@ -64,8 +93,17 @@ export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }
           <option>READY</option>
           <option>CONDITIONALLY READY</option>
           <option>NOT READY</option>
+          <option>In Progress</option>
         </select>
+        <button
+          onClick={() => exportCSV(filtered)}
+          className="bg-[#111] border border-[#222] rounded-lg px-4 py-2 text-[#888] text-sm hover:text-white hover:border-[#444] transition"
+        >
+          Export CSV
+        </button>
       </div>
+
+      <p className="text-xs text-[#555] mb-3">{filtered.length} session{filtered.length !== 1 ? "s" : ""}</p>
 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-[#222]">
@@ -73,43 +111,48 @@ export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }
           <thead className="bg-[#111] text-[#666] text-xs uppercase">
             <tr>
               <th className="px-4 py-3 text-left">Founder</th>
-              <th className="px-4 py-3 text-left">Idea</th>
+              <th className="px-4 py-3 text-left hidden sm:table-cell">Idea</th>
               <th className="px-4 py-3 text-left">Verdict</th>
-              <th className="px-4 py-3 text-left">Date</th>
+              <th className="px-4 py-3 text-left hidden md:table-cell">Score</th>
+              <th className="px-4 py-3 text-left hidden sm:table-cell">Date</th>
               <th className="px-4 py-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#1a1a1a]">
             {paginated.map((s) => (
               <tr key={s.id} className="bg-[#0d0d0d] hover:bg-[#111] transition">
-                <td className="px-4 py-3 text-white font-medium">{s.founderName}</td>
-                <td className="px-4 py-3 text-[#888] max-w-xs truncate">
-                  {s.startupIdea.slice(0, 60)}{s.startupIdea.length > 60 ? "…" : ""}
+                <td className="px-4 py-3">
+                  <div>
+                    <p className="text-white font-medium">{s.founderName}</p>
+                    {s.startupType && (
+                      <p className="text-[#444] text-xs mt-0.5">{s.startupType}</p>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[#888] max-w-xs hidden sm:table-cell">
+                  <span className="line-clamp-2 text-xs">{s.startupIdea}</span>
                 </td>
                 <td className="px-4 py-3">
                   {s.report ? (
-                    <span className={`inline-block border text-xs px-2 py-0.5 rounded-full ${VERDICT_BADGE[s.report.verdict] ?? ""}`}>
+                    <span className={`inline-block border text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${VERDICT_BADGE[s.report.verdict] ?? ""}`}>
                       {s.report.verdict}
                     </span>
                   ) : (
-                    <span className="text-[#555] text-xs">In progress</span>
+                    <span className="text-[#555] text-xs">{s.status === "active" ? "In progress" : "No report"}</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-[#666] text-xs">
+                <td className="px-4 py-3 text-[#666] text-xs hidden md:table-cell">
+                  {s.report?.realityScore != null ? `${s.report.realityScore}/100` : "—"}
+                </td>
+                <td className="px-4 py-3 text-[#666] text-xs hidden sm:table-cell">
                   {new Date(s.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-3 items-center">
-                    <Link
-                      href={`/admin/session/${s.id}`}
-                      className="text-[#E8A838] hover:underline text-xs"
-                    >
+                    <Link href={`/admin/session/${s.id}`} className="text-[#E8A838] hover:underline text-xs">
                       View
                     </Link>
-                    <a
-                      href={`/api/export?sessionId=${s.id}`}
-                      className="text-[#666] hover:text-white text-xs transition"
-                    >
+                    <a href={`/api/export?sessionId=${s.id}`} className="text-[#666] hover:text-white text-xs transition">
                       PDF
                     </a>
                     <button
@@ -124,7 +167,7 @@ export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }
             ))}
             {paginated.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[#555]">No sessions found.</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-[#555] text-sm">No sessions found.</td>
               </tr>
             )}
           </tbody>
@@ -148,8 +191,8 @@ export default function AdminTable({ sessions }: { sessions: EnrichedSession[] }
 
       {/* Delete modal */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-[#111] border border-[#333] rounded-xl p-6 max-w-sm w-full mx-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-6 max-w-sm w-full">
             <h3 className="font-crimson text-lg text-white mb-2">Delete Session?</h3>
             <p className="text-[#888] text-sm mb-5">This action cannot be undone.</p>
             <div className="flex gap-3">

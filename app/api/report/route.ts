@@ -6,11 +6,15 @@ import type { Report } from "@/lib/db";
 const REQUIRED_KEYS: (keyof Report)[] = [
   "verdict",
   "verdictExplanation",
+  "realityScore",
+  "phaseScores",
+  "contradictions",
   "founderStressTest",
   "projectStressTest",
   "whatFounderDoesNotKnow",
   "mostDangerousAssumptions",
   "mustResolveBeforeValidation",
+  "nextSteps",
   "killSignals",
   "finalSummary",
 ];
