@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { QUESTIONS } from "@/lib/questions";
+import PaymentModal, { type PaymentResult } from "@/components/PaymentModal";
 
 type Props = {
   sessionId: string;
@@ -47,8 +48,8 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
   const [showExample, setShowExample] = useState(false);
   const [tipIndex, setTipIndex] = useState(0);
   const [showPhaseNav, setShowPhaseNav] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
 
-  // Load from localStorage after mount (avoids SSR/hydration mismatch)
   useEffect(() => {
     setMounted(true);
     try {
@@ -65,7 +66,6 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
     } catch {}
   }, [sessionId]);
 
-  // Persist answers to localStorage
   useEffect(() => {
     if (!mounted) return;
     try {
@@ -80,20 +80,17 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
     } catch {}
   }, [flags, sessionId, mounted]);
 
-  // Focus textarea on question change, reset hint/example
   useEffect(() => {
     textareaRef.current?.focus();
     setShowHint(false);
     setShowExample(false);
   }, [current]);
 
-  // Rotate tips every 12 seconds
   useEffect(() => {
     const t = setInterval(() => setTipIndex((i) => (i + 1) % TIPS.length), 12000);
     return () => clearInterval(t);
   }, []);
 
-  // Save progress to server every 5 questions
   useEffect(() => {
     if (!mounted || current === 0 || current % 5 !== 0) return;
     fetch("/api/session/progress", {
@@ -131,7 +128,7 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
   const handleNext = () => {
     if (!canAdvance) return;
     if (isLast) {
-      handleSubmit();
+      setShowPayment(true);
     } else {
       setCurrent((c) => c + 1);
     }
@@ -148,7 +145,8 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
     }
   };
 
-  const handleSubmit = async () => {
+  const handlePaymentSuccess = async (payment: PaymentResult) => {
+    setShowPayment(false);
     if (submitted || submitting) return;
     setSubmitted(true);
     setSubmitting(true);
@@ -166,7 +164,7 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
       const res = await fetch("/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, answers: payload }),
+        body: JSON.stringify({ sessionId, answers: payload, payment }),
       });
 
       if (!res.ok) {
@@ -208,6 +206,16 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+      {showPayment && (
+        <PaymentModal
+          description="Founder Readiness Report"
+          founderName={founderName}
+          receipt={`frc-${sessionId.slice(0, 20)}`}
+          onSuccess={handlePaymentSuccess}
+          onCancel={() => setShowPayment(false)}
+        />
+      )}
+
       {/* Header */}
       <header className="shrink-0 px-4 py-3 border-b border-[#1a1a1a] bg-[#0d0d0d]">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
@@ -399,13 +407,21 @@ export default function QuestionnaireInterface({ sessionId, founderName, startup
               disabled={!canAdvance}
               className="flex-1 bg-[#E8A838] text-black font-semibold px-4 py-2.5 rounded-lg text-sm hover:bg-[#d4962e] transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {isLast ? "Submit & Generate Report →" : "Next →"}
+              {isLast ? "Pay & Generate Report →" : "Next →"}
             </button>
           </div>
 
-          <p className="text-center text-xs text-[#333]">
-            Ctrl/Cmd + Enter to {isLast ? "submit" : "advance"}
-          </p>
+          {isLast && (
+            <p className="text-center text-xs text-[#444]">
+              Payment of ₹999 required to generate your report
+            </p>
+          )}
+
+          {!isLast && (
+            <p className="text-center text-xs text-[#333]">
+              Ctrl/Cmd + Enter to advance
+            </p>
+          )}
 
           {/* Progress summary */}
           <div className="flex items-center justify-center gap-4 text-xs text-[#444] pt-2 border-t border-[#111]">

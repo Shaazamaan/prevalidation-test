@@ -1,14 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, updateSession, saveReport } from "@/lib/db";
 import { buildEvaluationPrompt } from "@/lib/evaluate-prompt";
+import { verifyPaymentSignature } from "@/lib/razorpay";
+import { isAdminRequest } from "@/lib/admin-auth";
 import type { Report } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type AIResult = { content: string | null; error?: string };
+type PaymentData = { orderId: string; paymentId: string; signature: string };
 
-const TIMEOUT = 20000;
+const TIMEOUT = 25000;
+
+async function callClaude(prompt: string): Promise<AIResult> {
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: AbortSignal.timeout(TIMEOUT),
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 4000,
+        temperature: 0.3,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { content: null, error: `Claude ${res.status}: ${data?.error?.message}` };
+    return { content: data.content?.[0]?.text ?? null };
+  } catch (e) {
+    return { content: null, error: `Claude exception: ${String(e)}` };
+  }
+}
 
 async function callGroq(prompt: string): Promise<AIResult> {
   try {
@@ -20,10 +48,10 @@ async function callGroq(prompt: string): Promise<AIResult> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
         stream: false,
-        max_tokens: 3000,
+        max_tokens: 4000,
         temperature: 0.3,
       }),
     });
@@ -45,7 +73,7 @@ async function callGemini(prompt: string): Promise<AIResult> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 3000 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 4000 },
         }),
       }
     );
@@ -67,10 +95,10 @@ async function callNvidia(prompt: string): Promise<AIResult> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "meta/llama-3.1-8b-instruct",
+        model: "meta/llama-3.3-70b-instruct",
         messages: [{ role: "user", content: prompt }],
         stream: false,
-        max_tokens: 3000,
+        max_tokens: 4000,
         temperature: 0.3,
       }),
     });
@@ -97,7 +125,7 @@ async function callOpenRouter(prompt: string): Promise<AIResult> {
         model: "mistralai/mistral-7b-instruct:free",
         messages: [{ role: "user", content: prompt }],
         stream: false,
-        max_tokens: 3000,
+        max_tokens: 4000,
         temperature: 0.3,
       }),
     });
@@ -135,19 +163,22 @@ async function raceFirst(fns: (() => Promise<AIResult>)[]): Promise<string | nul
 }
 
 async function getAIResponse(prompt: string): Promise<string | null> {
-  // Try Groq + Gemini in parallel first (highest capacity/quality)
+  // Try Claude first (best quality, most reliable)
+  const claude = await callClaude(prompt);
+  if (claude.content) return claude.content;
+
+  // Race Groq + Gemini
   const first = await raceFirst([
     () => callGroq(prompt),
     () => callGemini(prompt),
   ]);
   if (first) return first;
 
-  // Fallback: NVIDIA + OpenRouter in parallel
-  const second = await raceFirst([
+  // Fallback: NVIDIA + OpenRouter
+  return raceFirst([
     () => callNvidia(prompt),
     () => callOpenRouter(prompt),
   ]);
-  return second;
 }
 
 function extractReport(text: string): Report | null {
@@ -155,7 +186,6 @@ function extractReport(text: string): Report | null {
   if (!match) return null;
   try {
     const parsed = JSON.parse(match[1].trim()) as Report;
-    // Validate required fields exist
     if (!parsed.verdict || !parsed.finalSummary) return null;
     return parsed;
   } catch {
@@ -178,19 +208,37 @@ function isReportComplete(report: Report): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    const { sessionId, answers } = await req.json() as {
+    const body = await req.json() as {
       sessionId: string;
       answers: { question: string; answer: string; phase?: number }[];
+      payment?: PaymentData;
     };
+
+    const { sessionId, answers, payment } = body;
 
     if (!sessionId || !answers?.length) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
+    // Payment required unless this is an admin re-evaluate call
+    const adminRequest = isAdminRequest(req);
+    if (!adminRequest) {
+      if (!payment?.orderId || !payment?.paymentId || !payment?.signature) {
+        return NextResponse.json({ error: "Payment required" }, { status: 402 });
+      }
+      const valid = verifyPaymentSignature(payment.orderId, payment.paymentId, payment.signature);
+      if (!valid) {
+        return NextResponse.json({ error: "Invalid payment signature" }, { status: 402 });
+      }
+    }
+
     const session = await getSession(sessionId);
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-    if (session.status === "completed") {
-      return NextResponse.json({ error: "Already completed" }, { status: 403 });
+
+    // Allow re-evaluation (reset status check)
+    if (session.status === "completed" && !adminRequest) {
+      // For paid retries, we allow re-evaluation
+      await updateSession(sessionId, { status: "active" });
     }
 
     const prompt = buildEvaluationPrompt(
@@ -225,7 +273,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Ensure arrays that may be missing are initialised
     report.contradictions = report.contradictions ?? [];
     report.nextSteps = report.nextSteps ?? [];
     report.phaseScores = report.phaseScores ?? [];

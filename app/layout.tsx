@@ -5,17 +5,17 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Founder Readiness Check — Are You Ready to Validate?",
-  description: "Answer 70 structured questions across 14 dimensions. Get a brutally honest AI evaluation of whether your startup idea is ready for market validation.",
+  title: "Devbridge — Startup Readiness & Pitch Analysis",
+  description: "AI-powered startup evaluation tools. Founder Readiness Check, Startup Viability Advisor, and Pitch Deck Validator. Know where you stand before you build.",
   openGraph: {
-    title: "Founder Readiness Check",
+    title: "Devbridge — Startup Readiness & Pitch Analysis",
     description: "Find out if your startup idea is ready for market validation — before you waste a single day.",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Founder Readiness Check",
-    description: "Get a brutally honest evaluation of your startup readiness.",
+    title: "Devbridge",
+    description: "AI-powered startup readiness and pitch deck evaluation.",
   },
 };
 

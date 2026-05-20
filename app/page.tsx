@@ -1,6 +1,7 @@
 import FounderForm from "@/components/FounderForm";
 import SampleReportModal from "@/components/SampleReportModal";
 import { getSessionCount } from "@/lib/db";
+import Link from "next/link";
 
 export const revalidate = 300;
 
@@ -15,6 +16,7 @@ export default async function HomePage() {
       <div className="w-full max-w-lg">
         {/* Hero */}
         <div className="mb-8 text-center">
+          <p className="text-[#E8A838] text-xs uppercase tracking-widest mb-3">Devbridge</p>
           <h1 className="font-crimson text-4xl sm:text-5xl font-semibold text-white leading-tight mb-3">
             Are You Ready to Validate?
           </h1>
@@ -62,6 +64,31 @@ export default async function HomePage() {
           ))}
         </div>
 
+        {/* Other tools */}
+        <div className="mt-8 space-y-3">
+          <p className="text-xs text-[#444] uppercase tracking-widest text-center">More Tools</p>
+          <Link
+            href="/advisor"
+            className="flex items-center justify-between bg-[#111] border border-[#222] rounded-xl p-4 hover:border-[#E8A838]/50 hover:bg-[#111] transition group"
+          >
+            <div>
+              <p className="text-white text-sm font-medium group-hover:text-[#E8A838] transition">Startup Viability Advisor</p>
+              <p className="text-[#555] text-xs mt-0.5">7-section intake · 6 pathways · Geography-aware</p>
+            </div>
+            <span className="text-[#444] group-hover:text-[#E8A838] transition text-sm">→</span>
+          </Link>
+          <Link
+            href="/pitch-deck"
+            className="flex items-center justify-between bg-[#111] border border-[#222] rounded-xl p-4 hover:border-[#E8A838]/50 transition group"
+          >
+            <div>
+              <p className="text-white text-sm font-medium group-hover:text-[#E8A838] transition">Pitch Deck Validator</p>
+              <p className="text-[#555] text-xs mt-0.5">Upload PDF · DB Score + GR Score · 23 dimensions</p>
+            </div>
+            <span className="text-[#444] group-hover:text-[#E8A838] transition text-sm">→</span>
+          </Link>
+        </div>
+
         {/* Privacy notice */}
         <div className="mt-6 bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4">
           <p className="text-xs text-[#444] leading-relaxed">
@@ -70,9 +97,14 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <footer className="mt-12 text-center text-xs text-[#333] space-y-1">
+      <footer className="mt-12 text-center text-xs text-[#333] space-y-2">
         <p>This is a readiness check, not a pitch evaluation or funding tool.</p>
         <p>AI-generated reports are a starting point for thinking, not a final verdict.</p>
+        <div className="flex justify-center gap-4 mt-2 text-[#2a2a2a]">
+          <Link href="/privacy-policy" className="hover:text-[#555] transition">Privacy Policy</Link>
+          <Link href="/terms" className="hover:text-[#555] transition">Terms of Service</Link>
+          <Link href="/refund-policy" className="hover:text-[#555] transition">Refund Policy</Link>
+        </div>
       </footer>
     </main>
   );
