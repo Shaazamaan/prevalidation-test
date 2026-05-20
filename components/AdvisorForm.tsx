@@ -73,8 +73,11 @@ export default function AdvisorForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [report, setReport] = useState<AdvisorReport | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
+  const [profileCountry, setProfileCountry] = useState("");
 
   // Pre-fill from landing page profile (runs once on mount)
   useEffect(() => {
@@ -83,6 +86,7 @@ export default function AdvisorForm() {
     setProfileLoaded(true);
     if (p.email) setProfileEmail(p.email);
     if (p.phone) setProfilePhone(`${p.countryCode ?? ""} ${p.phone ?? ""}`.trim());
+    if (p.country) setProfileCountry(p.country);
     setIntake((prev) => ({
       ...prev,
       founderName: prev.founderName || p.name || "",
@@ -121,7 +125,13 @@ export default function AdvisorForm() {
       const res = await fetch("/api/advisor/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ intake, payment }),
+        body: JSON.stringify({
+          intake,
+          payment,
+          founderEmail: profileEmail || undefined,
+          founderPhone: profilePhone || undefined,
+          founderCountry: profileCountry || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -133,6 +143,7 @@ export default function AdvisorForm() {
       }
 
       setReport(data.report as AdvisorReport);
+      if (data.sessionId) setSessionId(data.sessionId);
     } catch {
       setError("Connection error. Please try again.");
     } finally {
@@ -257,8 +268,32 @@ export default function AdvisorForm() {
           <p className="text-[#ccc] text-sm leading-relaxed">{report.finalMessage}</p>
         </div>
 
+        {/* Share link */}
+        {sessionId && (
+          <div className="bg-[#111] border border-[#2a2a2a] rounded-xl p-4">
+            <p className="text-xs text-[#555] uppercase tracking-wide mb-2">Share Your Report</p>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/advisor/report/${sessionId}`}
+                className="flex-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-[#888] text-xs truncate focus:outline-none"
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/advisor/report/${sessionId}`);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="shrink-0 text-xs px-3 py-2 bg-[#E8A838] text-black rounded-lg font-medium hover:bg-[#d4962e] transition"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+          </div>
+        )}
+
         <button
-          onClick={() => { setReport(null); setSection(0); setIntake({}); }}
+          onClick={() => { setReport(null); setSection(0); setIntake({}); setSessionId(null); }}
           className="w-full bg-[#111] border border-[#222] text-[#666] py-3 rounded-xl text-sm hover:text-white hover:border-[#444] transition"
         >
           Start New Evaluation

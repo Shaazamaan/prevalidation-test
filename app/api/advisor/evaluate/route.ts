@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { v4 as uuidv4 } from "uuid";
 import { buildAdvisorPrompt, type AdvisorIntake } from "@/lib/advisor-prompt";
 import { verifyPaymentSignature } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
+import { saveAdvisorSession, hashIP } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -133,9 +135,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as {
       intake: AdvisorIntake;
       payment?: PaymentData;
+      founderEmail?: string;
+      founderPhone?: string;
+      founderCountry?: string;
     };
 
-    const { intake, payment } = body;
+    const { intake, payment, founderEmail, founderPhone, founderCountry } = body;
 
     if (!intake?.founderName || !intake?.problemStatement) {
       return NextResponse.json({ error: "Missing required intake fields" }, { status: 400 });
@@ -171,7 +176,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, report });
+    const sessionId = uuidv4();
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "unknown";
+    const ipHash = await hashIP(ip);
+
+    await saveAdvisorSession({
+      id: sessionId,
+      tool: "advisor",
+      founderName: intake.founderName,
+      email: founderEmail,
+      phone: founderPhone,
+      country: founderCountry ?? intake.location,
+      intake: intake as unknown as Record<string, unknown>,
+      report: report as unknown as Record<string, unknown>,
+      pathway: report.pathway,
+      pathwayLabel: report.pathwayLabel,
+      overallScore: report.overallScore,
+      createdAt: Date.now(),
+      ipHash,
+    });
+
+    return NextResponse.json({ success: true, report, sessionId });
   } catch (err) {
     console.error("[Advisor] Error:", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
