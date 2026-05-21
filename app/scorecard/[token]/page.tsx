@@ -64,10 +64,10 @@ export default async function ScorecardPage({ params }: Props) {
           <div className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-2xl p-5 mb-4">
             <p className="text-xs text-[#444] uppercase tracking-widest mb-4">Phase Scores</p>
             <div className="space-y-3">
-              {report.phaseScores.map((ph: { phase: string; score: number }, i: number) => (
+              {report.phaseScores.map((ph, i: number) => (
                 <div key={i}>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-[#666]">{ph.phase}</span>
+                    <span className="text-[#666]">{ph.title}</span>
                     <span className="text-[#888]">{ph.score}/100</span>
                   </div>
                   {scoreBar(ph.score)}
