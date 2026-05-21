@@ -274,7 +274,7 @@ export async function POST(req: NextRequest) {
         });
         sendPaymentReceiptEmail({
           to: founderEmail!,
-          founderName,
+          founderName: founderName ?? "",
           tool: "pitchdeck",
           amountRs: Math.round(total / 100),
           orderId: payment!.orderId,
