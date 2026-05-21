@@ -39,19 +39,27 @@ async function callGroq(prompt: string): Promise<string> {
 }
 
 async function callClaude(prompt: string): Promise<string> {
-  const { Anthropic } = await import("@anthropic-ai/sdk");
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const msg = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2000,
-    messages: [
-      {
-        role: "user",
-        content: `You are a startup advisor. Given a struggling startup idea and its weakness, suggest 3 adjacent pivot ideas that address the core weakness while preserving founder strengths. Return JSON array.\n\n${prompt}`,
-      },
-    ],
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    signal: AbortSignal.timeout(TIMEOUT),
+    headers: {
+      "x-api-key": process.env.ANTHROPIC_API_KEY!,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 2000,
+      messages: [
+        {
+          role: "user",
+          content: `You are a startup advisor. Given a struggling startup idea and its weakness, suggest 3 adjacent pivot ideas that address the core weakness while preserving founder strengths. Return JSON array.\n\n${prompt}`,
+        },
+      ],
+    }),
   });
-  return (msg.content[0] as { text: string }).text;
+  const data = await res.json();
+  return data.content[0].text as string;
 }
 
 function parseJSON(text: string) {
