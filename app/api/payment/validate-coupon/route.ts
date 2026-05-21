@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { isCouponUsed, isEmailCouponUsed } from "@/lib/db";
+import { isCouponUsed, isEmailCouponUsed, getDynamicCoupon } from "@/lib/db";
 
 // Format: CODE:PERCENT or CODE:PERCENT:email@specific.com
 function parseCoupons(): Record<string, { discount: number; email?: string }> {
@@ -31,6 +31,16 @@ export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code")?.toUpperCase() ?? "";
   const email = req.nextUrl.searchParams.get("email")?.toLowerCase() ?? "";
   if (!code) return NextResponse.json({ valid: false });
+
+  // Check dynamic (referral) coupons first
+  if (code.startsWith("REF5-")) {
+    const dynCoupon = await getDynamicCoupon(code);
+    if (!dynCoupon) return NextResponse.json({ valid: false });
+    if (dynCoupon.usedAt) return NextResponse.json({ valid: false, reason: "already_used" });
+    if (Date.now() > dynCoupon.expiresAt) return NextResponse.json({ valid: false, reason: "expired" });
+    if (email && dynCoupon.issuedTo !== email) return NextResponse.json({ valid: false, reason: "not_authorized" });
+    return NextResponse.json({ valid: true, discount: dynCoupon.discount, free: false });
+  }
 
   const coupons = parseCoupons();
   if (!(code in coupons)) return NextResponse.json({ valid: false });

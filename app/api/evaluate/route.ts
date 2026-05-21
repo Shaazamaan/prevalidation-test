@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, type PaymentRecord } from "@/lib/db";
+import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, markDynamicCouponUsed, triggerReferralReward, type PaymentRecord } from "@/lib/db";
 import { buildEvaluationPrompt } from "@/lib/evaluate-prompt";
 import { verifyPaymentSignature, getRazorpayKeys } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type AIResult = { content: string | null; error?: string };
-type PaymentData = { orderId: string; paymentId: string; signature: string; amount?: number; couponToken?: string };
+type PaymentData = { orderId: string; paymentId: string; signature: string; amount?: number; couponToken?: string; discountCoupon?: string };
 
 const TIMEOUT = 25000;
 
@@ -332,7 +332,12 @@ export async function POST(req: NextRequest) {
         markCouponUsed(couponCode),
         ...(session.email ? [markEmailCouponUsed(couponCode, session.email), incrementCouponUsage(couponCode, session.email)] : [incrementCouponUsage(couponCode, "unknown")]),
       ] : payment && !isFreeOrder && !adminRequest ? [markPaymentUsed(payment.orderId)] : []),
+      ...(payment?.discountCoupon ? [markDynamicCouponUsed(payment.discountCoupon)] : []),
     ]);
+
+    if (!adminRequest && !isFreeOrder && session.email) {
+      triggerReferralReward(session.email).catch(() => {});
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

@@ -358,3 +358,151 @@ export async function getAllPushSubscriptions(): Promise<PushSubscription[]> {
 export async function getPWAInstallCount(): Promise<number> {
   return (await kv.get<number>("pwa:install:count")) ?? 0;
 }
+
+// ── Users & Referral System ──────────────────────────────────────────────────
+
+const PROFILE_TTL = 5 * 365 * 24 * 60 * 60; // 5 years
+const DYNCP_TTL = 90 * 24 * 60 * 60; // 90 days
+
+export type UserProfile = {
+  email: string;
+  name: string;
+  picture?: string;
+  referralCode: string;
+  referredBy?: string; // referrer's email
+  joinedAt: number;
+  joinedCouponIssued: boolean;
+};
+
+export type DynamicCoupon = {
+  code: string;
+  discount: number; // percentage
+  issuedTo: string; // email
+  reason: "referral_joiner" | "referral_converter";
+  issuedAt: number;
+  expiresAt: number; // ms
+  usedAt?: number; // ms
+};
+
+function genReferralCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return "DBK-" + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+function genCouponCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return "REF5-" + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+export async function getUser(email: string): Promise<UserProfile | null> {
+  return kv.get<UserProfile>(`usr:${email.toLowerCase()}`);
+}
+
+export async function createOrGetUser(email: string, name: string, picture?: string): Promise<UserProfile> {
+  const existing = await getUser(email);
+  if (existing) {
+    if (existing.name !== name || existing.picture !== picture) {
+      const updated = { ...existing, name, picture };
+      await kv.set(`usr:${email.toLowerCase()}`, updated, { ex: PROFILE_TTL });
+      return updated;
+    }
+    return existing;
+  }
+  let referralCode = genReferralCode();
+  while (await kv.get(`rcref:${referralCode}`)) referralCode = genReferralCode();
+  const profile: UserProfile = {
+    email: email.toLowerCase(),
+    name,
+    picture,
+    referralCode,
+    joinedAt: Date.now(),
+    joinedCouponIssued: false,
+  };
+  await kv.set(`usr:${email.toLowerCase()}`, profile, { ex: PROFILE_TTL });
+  await kv.set(`rcref:${referralCode}`, email.toLowerCase(), { ex: PROFILE_TTL });
+  return profile;
+}
+
+async function issueDynamicCoupon(toEmail: string, reason: "referral_joiner" | "referral_converter"): Promise<string> {
+  const code = genCouponCode();
+  const now = Date.now();
+  const coupon: DynamicCoupon = {
+    code,
+    discount: 5,
+    issuedTo: toEmail.toLowerCase(),
+    reason,
+    issuedAt: now,
+    expiresAt: now + DYNCP_TTL * 1000,
+  };
+  await kv.set(`dyncp:${code}`, coupon, { ex: DYNCP_TTL });
+  const existing = await kv.get<string[]>(`ucpns:${toEmail.toLowerCase()}`) ?? [];
+  await kv.set(`ucpns:${toEmail.toLowerCase()}`, [...existing, code], { ex: PROFILE_TTL });
+  return code;
+}
+
+export async function assignReferral(email: string, refCode: string): Promise<void> {
+  const user = await getUser(email);
+  if (!user || user.referredBy || user.joinedCouponIssued) return;
+  const referrerEmail = await kv.get<string>(`rcref:${refCode.toUpperCase()}`);
+  if (!referrerEmail || referrerEmail === email.toLowerCase()) return;
+  await issueDynamicCoupon(email, "referral_joiner");
+  const referredList = await kv.get<string[]>(`rcrl:${referrerEmail}`) ?? [];
+  if (!referredList.includes(email.toLowerCase())) {
+    await kv.set(`rcrl:${referrerEmail}`, [...referredList, email.toLowerCase()], { ex: PROFILE_TTL });
+  }
+  const updated: UserProfile = { ...user, referredBy: referrerEmail, joinedCouponIssued: true };
+  await kv.set(`usr:${email.toLowerCase()}`, updated, { ex: PROFILE_TTL });
+}
+
+export async function triggerReferralReward(buyerEmail: string): Promise<void> {
+  const email = buyerEmail.toLowerCase();
+  const user = await getUser(email);
+  if (!user?.referredBy) return;
+  const rewardKey = `rcrw:${email}`;
+  if (await kv.get(rewardKey)) return;
+  await kv.set(rewardKey, 1, { ex: PROFILE_TTL });
+  await issueDynamicCoupon(user.referredBy, "referral_converter");
+}
+
+export async function getDynamicCoupon(code: string): Promise<DynamicCoupon | null> {
+  return kv.get<DynamicCoupon>(`dyncp:${code.toUpperCase()}`);
+}
+
+export async function markDynamicCouponUsed(code: string): Promise<void> {
+  const coupon = await getDynamicCoupon(code);
+  if (!coupon) return;
+  await kv.set(`dyncp:${code.toUpperCase()}`, { ...coupon, usedAt: Date.now() }, { ex: DYNCP_TTL });
+}
+
+export async function getUserCoupons(email: string): Promise<DynamicCoupon[]> {
+  const codes = await kv.get<string[]>(`ucpns:${email.toLowerCase()}`) ?? [];
+  if (!codes.length) return [];
+  const coupons = await Promise.all(codes.map((c) => kv.get<DynamicCoupon>(`dyncp:${c}`)));
+  return (coupons.filter(Boolean) as DynamicCoupon[]).sort((a, b) => b.issuedAt - a.issuedAt);
+}
+
+export async function getUserReferralStats(email: string): Promise<{ total: number; converted: number }> {
+  const referred = await kv.get<string[]>(`rcrl:${email.toLowerCase()}`) ?? [];
+  const checks = await Promise.all(referred.map((e) => kv.get(`rcrw:${e}`)));
+  return { total: referred.length, converted: checks.filter(Boolean).length };
+}
+
+export async function getUserSessionsByEmail(email: string): Promise<{
+  readiness: (Session & { report: Report | null })[];
+  advisor: AdvisorSession[];
+  pitchDeck: PitchDeckSession[];
+}> {
+  const em = email.toLowerCase();
+  const [allSessions, allAdvisor, allPitchDeck] = await Promise.all([
+    getAllSessions(),
+    getAllAdvisorSessions(),
+    getAllPitchDeckSessions(),
+  ]);
+  const readinessSessions = allSessions.filter((s) => s.email?.toLowerCase() === em && s.status === "completed");
+  const reports = await Promise.all(readinessSessions.map((s) => getReport(s.id).catch(() => null)));
+  return {
+    readiness: readinessSessions.map((s, i) => ({ ...s, report: reports[i] ?? null })),
+    advisor: allAdvisor.filter((s) => s.email?.toLowerCase() === em),
+    pitchDeck: allPitchDeck.filter((s) => s.email?.toLowerCase() === em),
+  };
+}

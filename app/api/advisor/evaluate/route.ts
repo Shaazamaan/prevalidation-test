@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { buildAdvisorPrompt, type AdvisorIntake } from "@/lib/advisor-prompt";
 import { verifyPaymentSignature, getRazorpayKeys } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { saveAdvisorSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, type PaymentRecord } from "@/lib/db";
+import { saveAdvisorSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, markDynamicCouponUsed, triggerReferralReward, type PaymentRecord } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,7 +12,7 @@ export const maxDuration = 60;
 const TIMEOUT = 25000;
 
 type AIResult = { content: string | null; error?: string };
-type PaymentData = { orderId: string; paymentId: string; signature: string; amount?: number; couponToken?: string };
+type PaymentData = { orderId: string; paymentId: string; signature: string; amount?: number; couponToken?: string; discountCoupon?: string };
 
 async function callClaude(prompt: string): Promise<AIResult> {
   try {
@@ -227,6 +227,10 @@ export async function POST(req: NextRequest) {
       await incrementCouponUsage(couponCode, founderEmail ?? "unknown");
     } else if (payment && !isFreeOrder) {
       await markPaymentUsed(payment.orderId);
+    }
+    if (payment?.discountCoupon) await markDynamicCouponUsed(payment.discountCoupon);
+    if (!adminRequest && !isFreeOrder && founderEmail) {
+      triggerReferralReward(founderEmail).catch(() => {});
     }
 
     const paymentRecord: PaymentRecord = {

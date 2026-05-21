@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { buildPitchDeckPrompt } from "@/lib/pitch-deck-prompt";
 import { verifyPaymentSignature, getRazorpayKeys } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { savePitchDeckSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, type PaymentRecord } from "@/lib/db";
+import { savePitchDeckSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, markDynamicCouponUsed, triggerReferralReward, type PaymentRecord } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,7 +12,7 @@ export const maxDuration = 60;
 const TIMEOUT = 30000;
 
 type AIResult = { content: string | null; error?: string };
-type PaymentData = { orderId: string; paymentId: string; signature: string; amount?: number; couponToken?: string };
+type PaymentData = { orderId: string; paymentId: string; signature: string; amount?: number; couponToken?: string; discountCoupon?: string };
 
 interface PitchDeckReport {
   track: string;
@@ -225,6 +225,10 @@ export async function POST(req: NextRequest) {
       await incrementCouponUsage(couponCode, founderEmail ?? "unknown");
     } else if (payment && !isFreeOrder) {
       await markPaymentUsed(payment.orderId);
+    }
+    if (payment?.discountCoupon) await markDynamicCouponUsed(payment.discountCoupon);
+    if (!adminRequest && !isFreeOrder && founderEmail) {
+      triggerReferralReward(founderEmail).catch(() => {});
     }
 
     const paymentRecord: PaymentRecord = {

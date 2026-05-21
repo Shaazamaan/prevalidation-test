@@ -1,0 +1,26 @@
+import NextAuth from "next-auth";
+import Google from "next-auth/providers/google";
+import { createOrGetUser } from "@/lib/db";
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+  ],
+  pages: {
+    signIn: "/login",
+  },
+  callbacks: {
+    async signIn({ user }) {
+      if (user.email) {
+        await createOrGetUser(user.email, user.name ?? "", user.image ?? undefined).catch(() => {});
+      }
+      return true;
+    },
+    session({ session }) {
+      return session;
+    },
+  },
+});

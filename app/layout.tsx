@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import ThemeToggle from "@/components/ThemeToggle";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import RushHourBanner from "@/components/RushHourBanner";
+import Link from "next/link";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -47,6 +48,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <RushHourBanner />
           <ThemeToggle />
+          <Link
+            href="/login"
+            className="fixed top-3 left-4 z-40 text-xs text-[#444] hover:text-[#888] transition"
+          >
+            My Dashboard
+          </Link>
           {children}
           <PWAInstallPrompt />
           <Analytics />

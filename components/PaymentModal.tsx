@@ -36,6 +36,7 @@ export interface PaymentResult {
   paymentId: string;
   signature: string;
   couponToken?: string;
+  discountCoupon?: string; // referral coupon code applied
   amount: number; // paise
 }
 
@@ -177,6 +178,7 @@ export default function PaymentModal({
             paymentId: response.razorpay_payment_id,
             signature: response.razorpay_signature,
             couponToken,
+            discountCoupon: discount > 0 && !free ? coupon.trim().toUpperCase() : undefined,
             amount,
           });
         },
