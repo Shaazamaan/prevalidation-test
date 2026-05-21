@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
         await saveGSTInvoice({
           invoiceNo,
           orderId: payment!.orderId,
-          buyerName: founderName,
+          buyerName: founderName ?? "",
           buyerEmail: founderEmail!,
           tool: "pitchdeck",
           amountPaise: base,
