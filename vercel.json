@@ -1,5 +1,23 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/daily-tip",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/stale-eval-nudge",
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "30 3 * * 1"
+    },
+    {
+      "path": "/api/cron/email-drip",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

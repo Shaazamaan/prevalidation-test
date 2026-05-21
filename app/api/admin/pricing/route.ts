@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { getAllToolPrices, setToolPrice, type ToolKey } from "@/lib/db";
 
-const VALID_TOOLS: ToolKey[] = ["readiness", "advisor", "pitchdeck"];
+const VALID_TOOLS: ToolKey[] = ["readiness", "advisor", "pitchdeck", "pitch_practice"];
 
 export async function GET(req: NextRequest) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

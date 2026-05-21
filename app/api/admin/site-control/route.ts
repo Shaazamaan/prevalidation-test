@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { setSitePaused, isSitePaused } from "@/lib/db";
+import { setSitePaused, isSitePaused, setPauseUntil, getPauseUntil } from "@/lib/db";
 
 const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1484208084271497449/aHvNsA_u710r0SgceFtH6u0sOmSRIF8nTbxzjk75ACbzl_y-_dqHdE18tLlVFLRSwGP9";
 
@@ -18,22 +18,27 @@ async function sendDiscordAlert(message: string, title: string, color: number) {
 
 export async function GET(req: NextRequest) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const paused = await isSitePaused();
-  return NextResponse.json({ paused });
+  const [paused, pauseUntil] = await Promise.all([isSitePaused(), getPauseUntil()]);
+  return NextResponse.json({ paused, pauseUntil });
 }
 
 export async function POST(req: NextRequest) {
   if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { action, message } = await req.json();
+  const { action, message, pauseUntil } = await req.json();
 
   if (action === "pause") {
     await setSitePaused(true);
-    await sendDiscordAlert("🔴 Site has been **PAUSED** by admin. Evaluate routes return 503.", "Site Paused", 0xFF4444);
+    if (pauseUntil) await setPauseUntil(Number(pauseUntil));
+    await sendDiscordAlert(
+      `🔴 Site has been **PAUSED** by admin.${pauseUntil ? ` Auto-resumes at ${new Date(Number(pauseUntil)).toLocaleString()}.` : ""}`,
+      "Site Paused", 0xFF4444
+    );
     return NextResponse.json({ success: true, paused: true });
   }
 
   if (action === "resume") {
     await setSitePaused(false);
+    await setPauseUntil(null);
     await sendDiscordAlert("🟢 Site has been **RESUMED** by admin. All services active.", "Site Resumed", 0x44FF44);
     return NextResponse.json({ success: true, paused: false });
   }

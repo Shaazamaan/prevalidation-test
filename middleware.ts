@@ -12,16 +12,18 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Track referral code in cookie when ?ref=CODE is present
+  // Track referral and agent codes via cookies
   const ref = req.nextUrl.searchParams.get("ref");
-  if (ref && /^DBK-[A-Z0-9]{6}$/.test(ref)) {
+  const agref = req.nextUrl.searchParams.get("agref");
+
+  if ((ref && /^DBK-[A-Z0-9]{6}$/.test(ref)) || (agref && /^AGT-[A-Z0-9]{6}$/.test(agref))) {
     const res = NextResponse.next();
-    res.cookies.set("dbk_ref", ref, {
-      maxAge: 30 * 24 * 60 * 60,
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-    });
+    if (ref && /^DBK-[A-Z0-9]{6}$/.test(ref)) {
+      res.cookies.set("dbk_ref", ref, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
+    }
+    if (agref && /^AGT-[A-Z0-9]{6}$/.test(agref)) {
+      res.cookies.set("dbk_agref", agref, { maxAge: 30 * 24 * 60 * 60, httpOnly: true, sameSite: "lax", path: "/" });
+    }
     return res;
   }
 

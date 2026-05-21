@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRazorpayOrder } from "@/lib/razorpay";
-import { getToolPrice, type ToolKey } from "@/lib/db";
+import { getToolPrice, getPaymentGate, type ToolKey } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
     const { receipt, discount, tool } = await req.json() as { receipt: string; discount?: number; tool?: string };
     if (!receipt) return NextResponse.json({ error: "Missing receipt" }, { status: 400 });
+
+    const gate = await getPaymentGate();
+    if (gate === "open") {
+      return NextResponse.json({ orderId: "GATE_OPEN", amount: 0, free: true });
+    }
+    if (gate === "early_access") {
+      return NextResponse.json({ error: "We're in early access — payments aren't open yet. Please check back soon." }, { status: 403 });
+    }
+
     const baseAmount = await getToolPrice((tool ?? "readiness") as ToolKey);
     const pct = typeof discount === "number" && discount > 0 && discount < 100 ? discount : 0;
     const amount = pct > 0 ? Math.round(baseAmount * (1 - pct / 100)) : baseAmount;

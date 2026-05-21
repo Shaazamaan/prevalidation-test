@@ -4,7 +4,8 @@ import crypto from "crypto";
 import { buildPitchDeckPrompt } from "@/lib/pitch-deck-prompt";
 import { verifyPaymentSignature, getRazorpayKeys } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
-import { savePitchDeckSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, markDynamicCouponUsed, triggerReferralReward, type PaymentRecord } from "@/lib/db";
+import { savePitchDeckSession, hashIP, isPaymentUsed, markPaymentUsed, checkRateLimit, isCouponUsed, markCouponUsed, isSitePaused, isUserBanned, markEmailCouponUsed, incrementCouponUsage, markDynamicCouponUsed, triggerReferralReward, useAdminCoupon, linkSessionToAgent, completeOnboardingStep, getNextInvoiceNo, saveGSTInvoice, type PaymentRecord } from "@/lib/db";
+import { sendPaymentReceiptEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -160,6 +161,10 @@ export async function POST(req: NextRequest) {
       }, { status: 503 });
     }
 
+    if (founderEmail && !adminRequest && await isUserBanned(founderEmail)) {
+      return NextResponse.json({ error: "Your account has been suspended. Contact support." }, { status: 403 });
+    }
+
     const { keySecret: rzpSecret, mode: rzpMode } = await getRazorpayKeys();
 
     if (!adminRequest) {
@@ -226,9 +231,19 @@ export async function POST(req: NextRequest) {
     } else if (payment && !isFreeOrder) {
       await markPaymentUsed(payment.orderId);
     }
-    if (payment?.discountCoupon) await markDynamicCouponUsed(payment.discountCoupon);
+    if (payment?.discountCoupon) {
+      if (payment.discountCoupon.startsWith("REF5-")) {
+        await markDynamicCouponUsed(payment.discountCoupon);
+      } else {
+        await useAdminCoupon(payment.discountCoupon, founderEmail ?? "unknown", "pitchdeck");
+      }
+    }
     if (!adminRequest && !isFreeOrder && founderEmail) {
       triggerReferralReward(founderEmail).catch(() => {});
+    }
+
+    if (founderEmail) {
+      completeOnboardingStep(founderEmail, "first_eval").catch(() => {});
     }
 
     const paymentRecord: PaymentRecord = {
@@ -241,6 +256,32 @@ export async function POST(req: NextRequest) {
       mode: rzpMode,
       paidAt: Date.now(),
     };
+
+    if (!adminRequest && !isFreeOrder && payment?.orderId && founderEmail && paymentRecord.amount > 0) {
+      getNextInvoiceNo().then(async (invoiceNo) => {
+        const total = paymentRecord.amount;
+        const base = Math.round(total / 1.18);
+        await saveGSTInvoice({
+          invoiceNo,
+          orderId: payment!.orderId,
+          buyerName: founderName,
+          buyerEmail: founderEmail!,
+          tool: "pitchdeck",
+          amountPaise: base,
+          gstPaise: total - base,
+          totalPaise: total,
+          issuedAt: Date.now(),
+        });
+        sendPaymentReceiptEmail({
+          to: founderEmail!,
+          founderName,
+          tool: "pitchdeck",
+          amountRs: Math.round(total / 100),
+          orderId: payment!.orderId,
+          invoiceNo,
+        }).catch(() => {});
+      }).catch(() => {});
+    }
 
     await savePitchDeckSession({
       id: sessionId,
@@ -258,6 +299,18 @@ export async function POST(req: NextRequest) {
       ipHash,
       payment: paymentRecord,
     });
+
+    const agentCode = req.cookies.get("dbk_agref")?.value;
+    if (agentCode && !adminRequest && !isFreeOrder && (paymentRecord.amount ?? 0) > 0) {
+      linkSessionToAgent(agentCode, {
+        sessionId,
+        tool: "pitchdeck",
+        amount: paymentRecord.amount,
+        clientEmail: founderEmail,
+        clientName: founderName,
+        createdAt: Date.now(),
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ success: true, report, sessionId });
   } catch (err) {

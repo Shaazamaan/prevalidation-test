@@ -1,7 +1,7 @@
 {
   "name": "Devbridge — Startup Evaluation",
   "short_name": "Devbridge",
-  "description": "AI-powered startup readiness tools for founders.",
+  "description": "AI-powered startup evaluation for founders worldwide",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
@@ -16,5 +16,11 @@
     }
   ],
   "categories": ["business", "productivity"],
-  "lang": "en"
+  "lang": "en",
+  "shortcuts": [
+    { "name": "New Evaluation", "url": "/", "description": "Start a new readiness check" },
+    { "name": "Weekly Journal", "url": "/journal", "description": "Write this week's journal" },
+    { "name": "Investor CRM", "url": "/crm", "description": "Update your investor pipeline" },
+    { "name": "Founder Feed", "url": "/feed", "description": "See what founders are sharing" }
+  ]
 }

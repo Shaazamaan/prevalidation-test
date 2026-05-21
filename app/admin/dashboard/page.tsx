@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { unstable_cache } from "next/cache";
 import {
   getAllSessions,
   getReport,
@@ -7,10 +8,32 @@ import {
   getPWAInstallCount,
   getAllCouponStats,
   getRazorpayMode,
+  getAllAdminCoupons,
+  getAllAgents,
+  getAgentRevenue,
+  getAgentClients,
+  getAgentMessages,
+  getAgentSubscriptionPrice,
+  getAgentRazorpayPlanId,
+  getAllBlogPosts,
+  getContentItems,
+  getAllBans,
+  getAllBrainstormDocs,
+  getAllPitchPracticeSessions,
 } from "@/lib/db";
 import { isAdminServer } from "@/lib/admin-auth";
 import AdminDashboardClient from "@/components/AdminDashboardClient";
-import type { Session, AdvisorSession, PitchDeckSession, Report } from "@/lib/db";
+import type { Session, AdvisorSession, PitchDeckSession, Report, AdminCoupon, AgentProfile, AgentMessage, AgentClientEntry } from "@/lib/db";
+
+export type { AdminCoupon, AgentProfile, AgentMessage, AgentClientEntry };
+
+export type AgentDashData = {
+  profile: AgentProfile;
+  revenue: number;
+  clientCount: number;
+  clients: AgentClientEntry[];
+  messages: AgentMessage[];
+};
 
 export type RepeatUser = {
   email: string;
@@ -45,18 +68,49 @@ export type DashboardAnalytics = {
   razorpayMode: "test" | "live";
 };
 
+const getCachedSessionData = unstable_cache(
+  async () => {
+    const [readiness, advisor, pitchDeck] = await Promise.all([
+      getAllSessions().catch(() => [] as Session[]),
+      getAllAdvisorSessions().catch(() => [] as AdvisorSession[]),
+      getAllPitchDeckSessions().catch(() => [] as PitchDeckSession[]),
+    ]);
+    return { readiness, advisor, pitchDeck };
+  },
+  ["admin-sessions"],
+  { revalidate: 60, tags: ["admin-sessions"] }
+);
+
 export default async function DashboardPage() {
   if (!isAdminServer()) redirect("/admin");
 
-  const [readinessSessions, advisorSessions, pitchDeckSessions, pwaInstalls, couponStats, razorpayMode] =
+  const [{ readiness: readinessSessions, advisor: advisorSessions, pitchDeck: pitchDeckSessions }, pwaInstalls, couponStats, razorpayMode, adminCoupons, allAgents, agentSubPrice, agentPlanId, blogPosts, contentItems, allBans, brainstormDocs, pitchPracticeSessions] =
     await Promise.all([
-      getAllSessions(),
-      getAllAdvisorSessions(),
-      getAllPitchDeckSessions(),
+      getCachedSessionData(),
       getPWAInstallCount().catch(() => 0),
       getAllCouponStats().catch(() => [] as { code: string; count: number; emails: string[] }[]),
       getRazorpayMode(),
+      getAllAdminCoupons().catch(() => [] as AdminCoupon[]),
+      getAllAgents().catch(() => [] as AgentProfile[]),
+      getAgentSubscriptionPrice().catch(() => 29900),
+      getAgentRazorpayPlanId().catch(() => null),
+      getAllBlogPosts().catch(() => []),
+      getContentItems().catch(() => []),
+      getAllBans().catch(() => []),
+      getAllBrainstormDocs().catch(() => []),
+      getAllPitchPracticeSessions().catch(() => []),
     ]);
+
+  const agentData: AgentDashData[] = await Promise.all(
+    allAgents.map(async (a) => {
+      const [revenue, clients, messages] = await Promise.all([
+        getAgentRevenue(a.email).catch(() => 0),
+        getAgentClients(a.email).catch(() => [] as AgentClientEntry[]),
+        getAgentMessages(a.email).catch(() => [] as AgentMessage[]),
+      ]);
+      return { profile: a, revenue, clientCount: clients.length, clients, messages };
+    })
+  );
 
   const reports = await Promise.all(
     readinessSessions.map((s) => getReport(s.id).catch(() => null))
@@ -223,6 +277,15 @@ export default async function DashboardPage() {
           analytics={analytics}
           days={days}
           dayCounts={dayCounts}
+          adminCoupons={adminCoupons}
+          agentData={agentData}
+          agentSubPrice={agentSubPrice}
+          agentPlanId={agentPlanId}
+          blogPosts={blogPosts}
+          contentItems={contentItems}
+          allBans={allBans}
+          brainstormDocs={brainstormDocs}
+          pitchPracticeSessions={pitchPracticeSessions}
         />
       </div>
     </main>

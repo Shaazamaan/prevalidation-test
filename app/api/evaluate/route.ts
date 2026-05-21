@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed, isCouponUsed, markCouponUsed, isSitePaused, markEmailCouponUsed, incrementCouponUsage, markDynamicCouponUsed, triggerReferralReward, type PaymentRecord } from "@/lib/db";
+import { getSession, updateSession, saveReport, isPaymentUsed, markPaymentUsed, isCouponUsed, markCouponUsed, isSitePaused, isUserBanned, markEmailCouponUsed, incrementCouponUsage, markDynamicCouponUsed, triggerReferralReward, useAdminCoupon, linkSessionToAgent, recordScoreHistory, getScoreHistory, completeOnboardingStep, getNextInvoiceNo, saveGSTInvoice, setEmailDrip, checkAndAwardAchievements, type PaymentRecord } from "@/lib/db";
+import { sendPaymentReceiptEmail } from "@/lib/email";
 import { buildEvaluationPrompt } from "@/lib/evaluate-prompt";
 import { verifyPaymentSignature, getRazorpayKeys } from "@/lib/razorpay";
 import { isAdminRequest } from "@/lib/admin-auth";
@@ -267,6 +268,10 @@ export async function POST(req: NextRequest) {
     const session = await getSession(sessionId);
     if (!session) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
+    if (session.email && !adminRequest && await isUserBanned(session.email)) {
+      return NextResponse.json({ error: "Your account has been suspended. Contact support." }, { status: 403 });
+    }
+
     // Allow re-evaluation (reset status check)
     if (session.status === "completed" && !adminRequest) {
       // For paid retries, we allow re-evaluation
@@ -332,11 +337,88 @@ export async function POST(req: NextRequest) {
         markCouponUsed(couponCode),
         ...(session.email ? [markEmailCouponUsed(couponCode, session.email), incrementCouponUsage(couponCode, session.email)] : [incrementCouponUsage(couponCode, "unknown")]),
       ] : payment && !isFreeOrder && !adminRequest ? [markPaymentUsed(payment.orderId)] : []),
-      ...(payment?.discountCoupon ? [markDynamicCouponUsed(payment.discountCoupon)] : []),
+      ...(payment?.discountCoupon
+        ? payment.discountCoupon.startsWith("REF5-")
+          ? [markDynamicCouponUsed(payment.discountCoupon)]
+          : [useAdminCoupon(payment.discountCoupon, session.email ?? "unknown", "readiness")]
+        : []),
     ]);
 
     if (!adminRequest && !isFreeOrder && session.email) {
       triggerReferralReward(session.email).catch(() => {});
+    }
+
+    if (session.email) {
+      completeOnboardingStep(session.email, "first_eval").catch(() => {});
+    }
+
+    if (!adminRequest && !isFreeOrder && payment?.orderId && session.email && paymentRecord.amount > 0) {
+      getNextInvoiceNo().then(async (invoiceNo) => {
+        const total = paymentRecord.amount;
+        const base = Math.round(total / 1.18);
+        await saveGSTInvoice({
+          invoiceNo,
+          orderId: payment!.orderId,
+          buyerName: session.founderName,
+          buyerEmail: session.email!,
+          tool: "readiness",
+          amountPaise: base,
+          gstPaise: total - base,
+          totalPaise: total,
+          issuedAt: Date.now(),
+        });
+        sendPaymentReceiptEmail({
+          to: session.email!,
+          founderName: session.founderName,
+          tool: "readiness",
+          amountRs: Math.round(total / 100),
+          orderId: payment!.orderId,
+          invoiceNo,
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+
+    if (session.email) {
+      recordScoreHistory(session.email, {
+        score: report.realityScore,
+        verdict: report.verdict,
+        sessionId,
+        recordedAt: Date.now(),
+      }).catch(() => {});
+
+      // Start email drip sequence for authenticated users
+      setEmailDrip({
+        email: session.email,
+        name: session.founderName,
+        firstEvalAt: Date.now(),
+        sessionId,
+        score: report.realityScore,
+        verdict: report.verdict,
+      }).catch(() => {});
+
+      // Award achievements (check prior scores for improvement)
+      getScoreHistory(session.email).then((history) => {
+        const prevEntries = history.filter((e) => e.sessionId !== sessionId);
+        const prevScore = prevEntries.length ? prevEntries[prevEntries.length - 1].score : undefined;
+        const isImproved = prevScore !== undefined && report.realityScore > prevScore;
+        const achOpts: { score: number; action: string } = { score: report.realityScore, action: "first_eval" };
+        if (isImproved) {
+          checkAndAwardAchievements(session.email!, { ...achOpts, action: "score_improved" }).catch(() => {});
+        }
+        checkAndAwardAchievements(session.email!, achOpts).catch(() => {});
+      }).catch(() => {});
+    }
+
+    const agentCode = req.cookies.get("dbk_agref")?.value;
+    if (agentCode && !adminRequest && !isFreeOrder && (paymentRecord.amount ?? 0) > 0) {
+      linkSessionToAgent(agentCode, {
+        sessionId,
+        tool: "readiness",
+        amount: paymentRecord.amount,
+        clientEmail: session.email,
+        clientName: session.founderName,
+        createdAt: Date.now(),
+      }).catch(() => {});
     }
 
     return NextResponse.json({ success: true });
