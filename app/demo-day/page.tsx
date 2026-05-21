@@ -72,7 +72,7 @@ export default function DemoDayPage() {
       body: JSON.stringify({ id }),
     });
     if (res.ok) {
-      setVoted((prev) => new Set([...prev, id]));
+      setVoted((prev) => new Set(Array.from(prev).concat(id)));
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, votes: e.votes + 1 } : e));
     }
   };
