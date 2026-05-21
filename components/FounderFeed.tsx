@@ -66,7 +66,7 @@ export default function FounderFeed({ isAuthenticated }: { isAuthenticated: bool
   const react = async (postId: string, type: "fire" | "clap" | "think") => {
     const key = `${postId}:${type}`;
     if (reacted.has(key)) return;
-    setReacted((s) => new Set([...s, key]));
+    setReacted((s) => new Set(Array.from(s).concat(key)));
     setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, reactions: { ...p.reactions, [type]: p.reactions[type] + 1 } } : p));
     await fetch("/api/feed", {
       method: "POST",
