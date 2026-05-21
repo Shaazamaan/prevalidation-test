@@ -204,7 +204,7 @@ export default async function DashboardPage() {
       email,
       name: entries[0].name ?? email,
       phone: entries[0].phone,
-      tools: [...new Set(entries.map((e) => e.tool))],
+      tools: Array.from(new Set(entries.map((e) => e.tool))),
       totalSpend: entries.reduce((s, e) => s + e.amount, 0),
       sessionCount: entries.length,
     }))
