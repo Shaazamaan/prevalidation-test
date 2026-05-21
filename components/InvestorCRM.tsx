@@ -114,7 +114,7 @@ export default function InvestorCRM({ initialContacts }: { initialContacts: Inve
               {[["Name *", "name", "Rahul Tiwari"], ["Firm *", "firm", "Sequoia India"], ["Email", "email", "rahul@sequoia.com"], ["LinkedIn", "linkedIn", "linkedin.com/in/..."]].map(([label, key, ph]) => (
                 <div key={key}>
                   <label className="text-[10px] text-[#444] block mb-1">{label}</label>
-                  <input value={(form as Record<string, string | undefined>)[key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={ph} className="w-full bg-[#0d0d0d] border border-[#222] rounded-lg px-3 py-2 text-xs text-white placeholder-[#333] focus:outline-none focus:border-[#E8A838]/50" />
+                  <input value={(form as unknown as Record<string, string | undefined>)[key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={ph} className="w-full bg-[#0d0d0d] border border-[#222] rounded-lg px-3 py-2 text-xs text-white placeholder-[#333] focus:outline-none focus:border-[#E8A838]/50" />
                 </div>
               ))}
             </div>
