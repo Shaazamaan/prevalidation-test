@@ -6,7 +6,7 @@ import { getAllPushSubscriptions } from "@/lib/db";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  if (!isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { title, body, url } = await req.json() as { title?: string; body?: string; url?: string };
 

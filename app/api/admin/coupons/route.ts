@@ -8,13 +8,13 @@ import {
 } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const coupons = await getAllAdminCoupons();
   return NextResponse.json({ coupons });
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json() as {
     code?: string;
     name?: string;
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json() as { code?: string; action?: string };
   if (!body.code || body.action !== "revoke") {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });

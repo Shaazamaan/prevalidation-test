@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { slug: string } }) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const post = await getBlogPost(params.slug);
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const body = await req.json();
@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { slug: stri
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { slug: string } }) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await deleteBlogPost(params.slug);
   return NextResponse.json({ success: true });
 }

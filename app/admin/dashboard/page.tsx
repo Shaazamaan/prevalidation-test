@@ -82,7 +82,7 @@ const getCachedSessionData = unstable_cache(
 );
 
 export default async function DashboardPage() {
-  if (!isAdminServer()) redirect("/admin");
+  if (!await isAdminServer()) redirect("/admin");
 
   const [{ readiness: readinessSessions, advisor: advisorSessions, pitchDeck: pitchDeckSessions }, pwaInstalls, couponStats, razorpayMode, adminCoupons, allAgents, agentSubPrice, agentPlanId, blogPosts, contentItems, allBans, brainstormDocs, pitchPracticeSessions] =
     await Promise.all([

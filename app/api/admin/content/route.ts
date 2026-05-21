@@ -4,14 +4,14 @@ import { getContentItems, saveContentItem, deleteContentItem } from "@/lib/db";
 import type { ContentItem } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const type = req.nextUrl.searchParams.get("type") as "tip" | "idea" | undefined;
   const items = await getContentItems(type ?? undefined);
   return NextResponse.json({ items });
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as { type?: "tip" | "idea"; body?: string; tags?: string[]; seed?: boolean };
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await req.json() as { id: string };
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   await deleteContentItem(id);

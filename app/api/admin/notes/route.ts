@@ -3,7 +3,7 @@ import { getSession, updateSession } from "@/lib/db";
 import { isAdminRequest } from "@/lib/admin-auth";
 
 export async function PATCH(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { sessionId, notes } = await req.json() as { sessionId: string; notes: string };
   if (!sessionId) return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });

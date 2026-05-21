@@ -3,13 +3,13 @@ import { saveFeedback, getAllFeedback, resolveFeedback } from "@/lib/db";
 import { isAdminServer } from "@/lib/admin-auth";
 
 export async function GET() {
-  if (!isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const entries = await getAllFeedback();
   return NextResponse.json(entries);
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await req.json() as { id: string };
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   await resolveFeedback(id);

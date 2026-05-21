@@ -12,7 +12,7 @@ import {
 } from "@/lib/db";
 
 export async function GET() {
-  if (!isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const [price, gate, toolPrices] = await Promise.all([
     getAIFeaturePrice(),
     getPaymentGate(),
@@ -22,7 +22,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json() as {
     price?: number;
     gate?: string;

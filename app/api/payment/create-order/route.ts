@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRazorpayOrder } from "@/lib/razorpay";
-import { getToolPrice, getPaymentGate, type ToolKey } from "@/lib/db";
+import { getToolPrice, getPaymentGate, checkRateLimit, hashIP, type ToolKey } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? req.headers.get("x-real-ip") ?? "unknown";
+    const ipHash = await hashIP(ip);
+    const allowed = await checkRateLimit("create-order", ipHash, 20, 3600);
+    if (!allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+
     const { receipt, discount, tool } = await req.json() as { receipt: string; discount?: number; tool?: string };
     if (!receipt) return NextResponse.json({ error: "Missing receipt" }, { status: 400 });
 

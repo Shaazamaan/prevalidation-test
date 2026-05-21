@@ -54,7 +54,7 @@ function getRecommendedActions(reports: Reports, onboardingSteps: string[]): Act
       });
     }
 
-    if (score >= 60 && !hasAdvisor && verdict !== "NOT READY") {
+    if ((score ?? 0) >= 60 && !hasAdvisor && verdict !== "NOT READY") {
       actions.push({
         label: "Map your funding pathway",
         description: "With a solid foundation, now's the time to understand which fundraising path fits your startup — bootstrap, angels, or VCs.",

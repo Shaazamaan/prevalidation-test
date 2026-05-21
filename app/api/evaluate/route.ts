@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
     const isFreeOrder = payment?.orderId?.startsWith("FREE_");
     const couponCode = isFreeOrder ? payment!.orderId.replace("FREE_", "") : undefined;
 
-    const adminRequest = isAdminRequest(req);
+    const adminRequest = await isAdminRequest(req);
 
     const paused = await isSitePaused();
     if (paused && !adminRequest) {

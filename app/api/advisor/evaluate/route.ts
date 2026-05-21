@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required intake fields" }, { status: 400 });
     }
 
-    const adminRequest = isAdminRequest(req);
+    const adminRequest = await isAdminRequest(req);
 
     const paused = await isSitePaused();
     if (paused && !adminRequest) {

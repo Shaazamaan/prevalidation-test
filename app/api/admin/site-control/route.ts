@@ -17,13 +17,13 @@ async function sendDiscordAlert(message: string, title: string, color: number) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const [paused, pauseUntil] = await Promise.all([isSitePaused(), getPauseUntil()]);
   return NextResponse.json({ paused, pauseUntil });
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { action, message, pauseUntil } = await req.json();
 
   if (action === "pause") {

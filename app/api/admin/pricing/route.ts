@@ -5,13 +5,13 @@ import { getAllToolPrices, setToolPrice, type ToolKey } from "@/lib/db";
 const VALID_TOOLS: ToolKey[] = ["readiness", "advisor", "pitchdeck", "pitch_practice"];
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const prices = await getAllToolPrices();
   return NextResponse.json(prices);
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { tool, amountRupees } = await req.json() as { tool: string; amountRupees: number };
 
   if (!VALID_TOOLS.includes(tool as ToolKey)) {

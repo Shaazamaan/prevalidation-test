@@ -4,7 +4,7 @@ import { isAdminServer } from "@/lib/admin-auth";
 import SessionDetail from "@/components/SessionDetail";
 
 export default async function AdminSessionPage({ params }: { params: { id: string } }) {
-  if (!isAdminServer()) redirect("/admin");
+  if (!await isAdminServer()) redirect("/admin");
 
   const [session, report] = await Promise.all([
     getSession(params.id),

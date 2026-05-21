@@ -3,13 +3,13 @@ import { isAdminServer } from "@/lib/admin-auth";
 import { getAnnouncement, setAnnouncement, clearAnnouncement } from "@/lib/db";
 
 export async function GET() {
-  if (!isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const ann = await getAnnouncement();
   return NextResponse.json(ann ?? null);
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminServer()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { message, type, clear } = await req.json() as { message?: string; type?: string; clear?: boolean };
   if (clear) {
     await clearAnnouncement();

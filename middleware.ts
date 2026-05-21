@@ -1,12 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 
-export function middleware(req: NextRequest) {
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "shaazamaanshaji@gmail.com").toLowerCase();
+
+export default auth(function middleware(req) {
   const { pathname } = req.nextUrl;
 
-  // Admin session protection
+  // Admin route protection — must be signed in as the admin Google account
   if (pathname.startsWith("/admin/dashboard") || pathname.startsWith("/admin/session")) {
-    const session = req.cookies.get("admin_session")?.value;
-    if (!session || session.length < 8) {
+    const email = req.auth?.user?.email;
+    if (email?.toLowerCase() !== ADMIN_EMAIL) {
       return NextResponse.redirect(new URL("/admin", req.url));
     }
     return NextResponse.next();
@@ -28,7 +31,7 @@ export function middleware(req: NextRequest) {
   }
 
   return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: ["/admin/dashboard/:path*", "/admin/session/:path*", "/((?!api|_next|.*\\..*).*)"],

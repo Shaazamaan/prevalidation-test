@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   const report = await getReport(sessionId);
   if (!report) return NextResponse.json({ error: "Report not found" }, { status: 404 });
 
-  if (isAdminRequest(req)) return NextResponse.json(report);
+  if (await isAdminRequest(req)) return NextResponse.json(report);
 
   return NextResponse.json({
     verdict: report.verdict,

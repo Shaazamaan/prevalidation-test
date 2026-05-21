@@ -3,7 +3,7 @@ import { getSession, updateSession } from "@/lib/db";
 import { isAdminRequest } from "@/lib/admin-auth";
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { sessionId } = await req.json() as { sessionId: string };
   if (!sessionId) return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });

@@ -17,7 +17,7 @@ import {
 } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const month = new Date().toISOString().slice(0, 7);
   const [jobs, expertSlots, demoDayEntries, providers, circles, events] = await Promise.all([
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { type, id } = await req.json() as { type: string; id: string };
   if (!type || !id) return NextResponse.json({ error: "type and id required" }, { status: 400 });
@@ -52,7 +52,7 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { type, id } = await req.json() as { type: string; id: string };
   if (type === "verify_provider") {

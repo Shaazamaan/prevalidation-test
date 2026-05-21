@@ -4,13 +4,13 @@ import { getAllBlogPosts, saveBlogPost, deleteBlogPost, getBlogPost } from "@/li
 import type { BlogPost } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const posts = await getAllBlogPosts();
   return NextResponse.json({ posts });
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json() as Partial<BlogPost>;
   if (!body.title?.trim() || !body.content?.trim()) {
     return NextResponse.json({ error: "title and content required" }, { status: 400 });
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json() as Partial<BlogPost> & { slug: string };
   if (!body.slug) return NextResponse.json({ error: "slug required" }, { status: 400 });
   const existing = await getBlogPost(body.slug);
@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { slug } = await req.json() as { slug: string };
   if (!slug) return NextResponse.json({ error: "slug required" }, { status: 400 });
   await deleteBlogPost(slug);

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -14,12 +14,15 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
+export const viewport: Viewport = {
+  themeColor: "#E8A838",
+};
+
 export const metadata: Metadata = {
   title: "Devbridge — Startup Readiness & Pitch Analysis",
   description: "AI-powered startup evaluation tools for founders. Readiness Check, Viability Advisor, Pitch Deck Validator, and 10+ AI tools. Know if your startup is fundable before you build.",
   keywords: ["startup evaluation", "pitch deck validator", "founder readiness", "startup viability", "seed funding", "startup advisor", "Devbridge", "startup tools", "AI tools for founders"],
   manifest: "/manifest.json",
-  themeColor: "#E8A838",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

@@ -4,13 +4,13 @@ import { getAgentSubscriptionPrice, setAgentSubscriptionPrice, getAgentRazorpayP
 import { getRazorpayKeys } from "@/lib/razorpay";
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const [price, planId] = await Promise.all([getAgentSubscriptionPrice(), getAgentRazorpayPlanId()]);
   return NextResponse.json({ price, planId });
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as { action?: "set_price" | "create_plan"; amountRupees?: number };
 

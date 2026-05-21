@@ -1,5 +1,7 @@
 import { kv } from "@vercel/kv";
 
+const SITE_URL = (process.env.NEXTAUTH_URL ?? "https://devbridgekerala.com").replace(/\/$/, "");
+
 export type EmailPayload = {
   to: string;
   subject: string;
@@ -79,7 +81,7 @@ export async function sendPaymentReceiptEmail(opts: {
       `Amount: ₹${opts.amountRs.toLocaleString("en-IN")}`,
       `Order ID: ${opts.orderId}${invoiceText}`,
       ``,
-      `Your report is ready in your dashboard: https://devbridgekerala.com/dashboard`,
+      `Your report is ready in your dashboard: ${SITE_URL}/dashboard`,
       ``,
       `Devbridge Team`,
     ].join("\n"),
@@ -92,7 +94,7 @@ export async function sendPaymentReceiptEmail(opts: {
         <li><b>Order ID:</b> ${opts.orderId}</li>
         ${invoiceLine}
       </ul>
-      <p><a href="https://devbridgekerala.com/dashboard">View your report in the dashboard →</a></p>
+      <p><a href="${SITE_URL}/dashboard">View your report in the dashboard →</a></p>
       <p>Devbridge Team</p>
     `,
   });
@@ -119,7 +121,7 @@ export async function sendStaleEvalEmail(opts: {
       ``,
       `Founders who re-evaluate after addressing feedback consistently score higher.`,
       ``,
-      `Run a new evaluation → https://devbridgekerala.com`,
+      `Run a new evaluation → ${SITE_URL}`,
       ``,
       `Devbridge Team`,
     ].join("\n"),
@@ -129,7 +131,7 @@ export async function sendStaleEvalEmail(opts: {
       <p>At the time, you scored <b>${opts.score}/100</b> — ${verdictShort}.</p>
       <p>A lot changes in ${opts.daysAgo} days. If you've been working on your idea, chances are your score looks different now.</p>
       <p>Founders who re-evaluate after addressing feedback consistently score higher.</p>
-      <p><a href="https://devbridgekerala.com">Run a new evaluation →</a></p>
+      <p><a href="${SITE_URL}">Run a new evaluation →</a></p>
       <p>Devbridge Team</p>
     `,
   });
@@ -143,7 +145,7 @@ export async function sendWeeklyDigest(opts: {
   daysAgoLastEval?: number;
 }): Promise<void> {
   const evalNudge = opts.daysAgoLastEval && opts.daysAgoLastEval >= 30
-    ? `\nYour last evaluation was ${opts.daysAgoLastEval} days ago. Founders who re-evaluate after feedback consistently improve. → devbridgekerala.com\n`
+    ? `\nYour last evaluation was ${opts.daysAgoLastEval} days ago. Founders who re-evaluate after feedback consistently improve. → ${SITE_URL}\n`
     : "";
 
   await sendEmail({
@@ -158,8 +160,8 @@ export async function sendWeeklyDigest(opts: {
       `• ${opts.feedPostsThisWeek} posts in the community feed`,
       ``,
       evalNudge,
-      `→ Community feed: https://devbridgekerala.com/feed`,
-      `→ Run an evaluation: https://devbridgekerala.com`,
+      `→ Community feed: ${SITE_URL}/feed`,
+      `→ Run an evaluation: ${SITE_URL}`,
       ``,
       `Devbridge Team`,
     ].join("\n"),
@@ -174,8 +176,8 @@ export async function sendWeeklyDigest(opts: {
         ? `<p>Your last evaluation was <b>${opts.daysAgoLastEval} days ago</b>. Founders who re-evaluate after feedback consistently improve.</p>`
         : ""}
       <p>
-        <a href="https://devbridgekerala.com/feed">Community feed →</a> &nbsp;|&nbsp;
-        <a href="https://devbridgekerala.com">Run an evaluation →</a>
+        <a href="${SITE_URL}/feed">Community feed →</a> &nbsp;|&nbsp;
+        <a href="${SITE_URL}">Run an evaluation →</a>
       </p>
       <p>Devbridge Team</p>
     `,
@@ -190,7 +192,7 @@ export async function sendDay1BreakdownEmail(opts: {
   sessionId: string;
 }): Promise<void> {
   const verdictShort = opts.verdict === "READY" ? "Ready" : opts.verdict === "CONDITIONALLY READY" ? "Conditionally Ready" : "Not Ready";
-  const siteUrl = "https://devbridgekerala.com";
+  const siteUrl = SITE_URL;
   const reportUrl = `${siteUrl}/report/${opts.sessionId}`;
   const scoreMsg = opts.score >= 70
     ? `You're in the top tier of founders who've been through Devbridge. That score is a strong signal — don't let it sit idle.`
@@ -243,7 +245,7 @@ export async function sendDay3RecommendationsEmail(opts: {
   score: number;
   verdict: string;
 }): Promise<void> {
-  const siteUrl = "https://devbridgekerala.com";
+  const siteUrl = SITE_URL;
   const tool = opts.score >= 60 ? "advisor" : opts.verdict === "NOT READY" ? "/" : "pitch-deck";
   const toolName = tool === "advisor" ? "Advisor Report" : tool === "/" ? "a fresh Readiness Check" : "Pitch Deck Evaluator";
   const toolUrl = `${siteUrl}/${tool === "/" ? "" : tool}`;
@@ -289,7 +291,7 @@ export async function sendDay7CommunityEmail(opts: {
   name: string;
   score: number;
 }): Promise<void> {
-  const siteUrl = "https://devbridgekerala.com";
+  const siteUrl = SITE_URL;
   await sendEmail({
     to: opts.to,
     subject: `One week in — your startup community is waiting`,
@@ -344,7 +346,7 @@ export async function sendWelcomeEmail(opts: {
       ``,
       `Welcome to Devbridge — your AI co-pilot for building a fundable startup.`,
       referralNote,
-      `Start your first readiness check: https://devbridgekerala.com`,
+      `Start your first readiness check: ${SITE_URL}`,
       ``,
       `Devbridge Team`,
     ].join("\n"),
@@ -352,7 +354,7 @@ export async function sendWelcomeEmail(opts: {
       <p>Hi ${opts.name},</p>
       <p>Welcome to Devbridge — your AI co-pilot for building a fundable startup.</p>
       ${opts.referredBy ? `<p>You joined via a referral link — a <b>5% welcome coupon</b> has been added to your account.</p>` : ""}
-      <p><a href="https://devbridgekerala.com">Start your first readiness check →</a></p>
+      <p><a href="${SITE_URL}">Start your first readiness check →</a></p>
       <p>Devbridge Team</p>
     `,
   });

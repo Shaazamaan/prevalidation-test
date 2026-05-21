@@ -1,15 +1,15 @@
-import { cookies } from "next/headers";
-import { NextRequest } from "next/server";
+import { auth } from "@/auth";
+import type { NextRequest } from "next/server";
 
-const SESSION_COOKIE = "admin_session";
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "shaazamaanshaji@gmail.com").toLowerCase();
 
-export function isAdminServer(): boolean {
-  const store = cookies();
-  const val = store.get(SESSION_COOKIE)?.value;
-  return !!val && val === process.env.NEXTAUTH_SECRET;
+export async function isAdminServer(): Promise<boolean> {
+  const session = await auth();
+  return session?.user?.email?.toLowerCase() === ADMIN_EMAIL;
 }
 
-export function isAdminRequest(req: NextRequest): boolean {
-  const val = req.cookies.get(SESSION_COOKIE)?.value;
-  return !!val && val === process.env.NEXTAUTH_SECRET;
+// req param kept for call-site compatibility; NextAuth v5 auth() reads cookies automatically
+export async function isAdminRequest(_req: NextRequest): Promise<boolean> {
+  const session = await auth();
+  return session?.user?.email?.toLowerCase() === ADMIN_EMAIL;
 }

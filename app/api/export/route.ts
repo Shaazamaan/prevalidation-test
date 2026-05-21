@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const [report, session] = await Promise.all([getReport(sessionId), getSession(sessionId)]);
   if (!report || !session) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const isAdmin = isAdminRequest(req);
+  const isAdmin = await isAdminRequest(req);
 
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "mm", format: "a4" });
