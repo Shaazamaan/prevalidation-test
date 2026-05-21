@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getAllPitchCompetitions, savePitchCompetition, deletePitchCompetition, type PitchCompetition } from "@/lib/db";
 
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "shaazamaanshaji@gmail.com").toLowerCase();
+
 export async function GET() {
   const competitions = await getAllPitchCompetitions();
   return NextResponse.json({ competitions });
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+  if (session.user.email.toLowerCase() !== ADMIN_EMAIL) {
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
 
