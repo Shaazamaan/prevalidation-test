@@ -158,7 +158,7 @@ export default function MatchDeck({ profiles, myProfile, isAuthenticated, userEm
                 <label className="text-[#555] text-xs mb-1.5 block">Stage</label>
                 <select
                   value={profileData.stage}
-                  onChange={(e) => setProfileData({ ...profileData, stage: e.target.value })}
+                  onChange={(e) => setProfileData({ ...profileData, stage: e.target.value as "idea" | "mvp" | "revenue" | "scale" })}
                   className="w-full bg-[#0d0d0d] border border-[#333] rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#E8A838] transition"
                 >
                   {Object.entries(STAGE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}

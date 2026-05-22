@@ -20,11 +20,6 @@ const INVESTOR_OPTIONS = [
   { value: "series_a_vc", label: "Series A VC", desc: "₹5–20Cr cheque, scale & metrics focus" },
 ];
 
-declare global {
-  interface Window {
-    Razorpay: new (opts: Record<string, unknown>) => { open(): void };
-  }
-}
 
 export default function PitchPractice({
   sessionCount,
@@ -180,7 +175,7 @@ export default function PitchPractice({
 
       const rzp = new window.Razorpay({
         key: razorpayKey,
-        amount: orderData.amount,
+        amount: orderData.amount ?? 0,
         currency: "INR",
         name: "Devbridge",
         description: "Pitch Practice Session",

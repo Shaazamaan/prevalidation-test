@@ -12,9 +12,6 @@ type OnePagerResult = {
   ask: string;
 };
 
-declare global {
-  interface Window { Razorpay: new (opts: Record<string, unknown>) => { open(): void }; }
-}
 function loadRazorpay(): Promise<boolean> {
   return new Promise((resolve) => {
     if (document.getElementById("rzp-sdk")) { resolve(true); return; }

@@ -5,12 +5,6 @@ import { useState } from "react";
 type Question = { q: string; why: string; followUp: string };
 type InterviewResult = { opening: string; questions: Question[]; closing: string };
 
-declare global {
-  interface Window {
-    Razorpay: new (opts: Record<string, unknown>) => { open(): void };
-  }
-}
-
 function loadRazorpay(): Promise<boolean> {
   return new Promise((resolve) => {
     if (document.getElementById("rzp-sdk")) { resolve(true); return; }

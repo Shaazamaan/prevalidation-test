@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 const CATS_ALL = ["legal", "finance", "design", "development", "marketing", "hr", "other"] as const;
-const BLANK_FORM = { name: "", category: "other" as const, speciality: "", location: "", bio: "", website: "" };
+const BLANK_FORM = { name: "", category: "other" as Category, speciality: "", location: "", bio: "", website: "" };
 
 type Category = "legal" | "finance" | "design" | "development" | "marketing" | "hr" | "other";
 

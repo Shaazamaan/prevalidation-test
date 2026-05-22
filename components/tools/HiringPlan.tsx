@@ -4,9 +4,6 @@ import { useState } from "react";
 type HireRole = { role: string; when: string; why: string; costRange: string; redFlags: string };
 type HiringResult = { summary: string; hires: HireRole[]; hiringPrinciples: string[]; mistakesToAvoid: string[] };
 
-declare global {
-  interface Window { Razorpay: new (opts: Record<string, unknown>) => { open(): void }; }
-}
 function loadRazorpay(): Promise<boolean> {
   return new Promise((resolve) => {
     if (document.getElementById("rzp-sdk")) { resolve(true); return; }
