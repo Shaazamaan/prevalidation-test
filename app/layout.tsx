@@ -2,14 +2,13 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import ThemeToggle from "@/components/ThemeToggle";
+import GlobalNav from "@/components/GlobalNav";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import RushHourBanner from "@/components/RushHourBanner";
 import AnnouncementBanner from "@/components/AnnouncementBanner";
 import MobileNav from "@/components/MobileNav";
 import FeedbackButton from "@/components/FeedbackButton";
 import SessionWrapper from "@/components/SessionWrapper";
-import Link from "next/link";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -56,44 +55,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
             <AnnouncementBanner />
             <RushHourBanner />
-            <ThemeToggle />
-            <Link
-              href="/login"
-              className="fixed top-3 left-4 z-40 text-xs text-[#444] hover:text-[#888] transition"
-            >
-              My Dashboard
-            </Link>
-            <Link
-              href="/agent/register"
-              className="fixed top-3 left-32 z-40 text-xs text-[#333] hover:text-[#555] transition"
-            >
-              Agent
-            </Link>
-            <Link
-              href="/insights"
-              className="fixed top-3 left-48 z-40 text-xs text-[#333] hover:text-[#555] transition"
-            >
-              Insights
-            </Link>
-            <Link
-              href="/match"
-              className="fixed top-3 left-60 z-40 text-xs text-[#333] hover:text-[#555] transition"
-            >
-              Match
-            </Link>
-            <Link
-              href="/pitch-practice"
-              className="fixed top-3 left-72 z-40 text-xs text-[#333] hover:text-[#555] transition"
-            >
-              Pitch AI
-            </Link>
-            <Link
-              href="/feed"
-              className="fixed top-3 left-[22rem] z-40 text-xs text-[#333] hover:text-[#555] transition"
-            >
-              Feed
-            </Link>
-            {children}
+            <GlobalNav />
+            <div className="pt-12">
+              {children}
+            </div>
             <MobileNav />
             <FeedbackButton />
             <PWAInstallPrompt />
