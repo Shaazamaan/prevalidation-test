@@ -32,7 +32,8 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
     // Dynamic require — build succeeds without nodemailer installed.
     // Run: npm install nodemailer @types/nodemailer  when adding SMTP.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const nodemailer = require("nodemailer") as typeof import("nodemailer");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nodemailer = require("nodemailer") as any;
     const transporter = nodemailer.createTransport({
       host,
       port,

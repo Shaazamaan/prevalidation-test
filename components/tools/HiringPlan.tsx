@@ -41,7 +41,7 @@ export default function HiringPlan({ sessionEmail, isFree, price }: { sessionEma
       if (!orderRes.ok) { setError("Failed to create order"); setLoading(false); return; }
       const { orderId, amount } = await orderRes.json() as { orderId: string; amount: number };
       const rzp = new window.Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, amount, currency: "INR",
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "", amount, currency: "INR",
         name: "Devbridge", description: "First Hiring Plan — AI Tool", order_id: orderId,
         handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
           setShowPayment(false); await submit({ orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature });

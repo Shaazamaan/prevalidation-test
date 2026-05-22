@@ -79,7 +79,7 @@ export default function InterviewScript({
       if (!orderRes.ok) { setError("Failed to create order"); setLoading(false); return; }
       const { orderId, amount } = await orderRes.json() as { orderId: string; amount: number };
       const rzp = new window.Razorpay({
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "",
         amount, currency: "INR", name: "Devbridge",
         description: "Customer Interview Script — AI Tool",
         order_id: orderId,
